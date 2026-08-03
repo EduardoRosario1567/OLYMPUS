@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+npm-debug.log*
+
+# Segredos — nunca commitar
+backend/.env
+frontend/.env.local
+
+# Banco local de desenvolvimento
+olympus_dev.db
+*.db
+
+# OS
+.DS_Store
