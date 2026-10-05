@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências do backend
         run: pip install -r requirements-core.txt -r backend/requirements.txt pytest
@@ -116,7 +116,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências
         working-directory: frontend
@@ -124,7 +124,8 @@ jobs:
 
       - name: Preparar .env.local
         working-directory: frontend
-        run: cp .env.local.example .env.local
+        run: |
+          printf '%s\n' 'NEXT_PUBLIC_API_BASE_URL=http://localhost:8000' > .env.local
 
       - name: Build de produção
         working-directory: frontend
