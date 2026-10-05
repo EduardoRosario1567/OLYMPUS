@@ -1,7 +1,7 @@
 {
   "id": "visual-design",
   "name": "Visual Design",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Creates a polished, coherent and responsive visual system.",
   "triggers": [
     "design",
@@ -26,7 +26,10 @@
   "guidance": [
     "Define one visual direction for the actual brand: audience, mood, typography roles, color tokens, spacing rhythm and imagery. For a cafe favor place, product and atmosphere; do not invent photographs of its real premises.",
     "Design the first viewport as a coherent composition with recognizable brand, concise promise, primary action and purposeful imagery where relevant. Avoid interchangeable generic cards, decorative badges and competing headlines.",
-    "Adapt composition and image crops intentionally for desktop/mobile; check focus, contrast, reduced motion and text over imagery. Judge the rendered result, not CSS length. Keep visual review pending until actually inspected."
+    "Adapt composition and image crops intentionally for desktop/mobile; check focus, contrast, reduced motion and text over imagery. Judge the rendered result, not CSS length. Keep visual review pending until actually inspected.",
+    "Write the visual concept and record image purpose, source, rights and confirmed business facts. Prefer supplied assets or locally imported credited images; never invent a photograph of the real business.",
+    "At completion, the configured independent vision reviewer receives real Chromium screenshots and the brief/concept. Repair its concrete findings, rerender and review again within the three-review budget. Missing vision capability is a blocker for this gate, never an aesthetic approval.",
+    "Treat model critique as bounded opinion and screenshot coverage, not human approval or proof of off-screen content. Claims that references were visually inspected require their actual pixels to have been supplied to a vision-capable model."
   ],
   "completion_checks": [
     "The page has a coherent visual system and clear hierarchy.",

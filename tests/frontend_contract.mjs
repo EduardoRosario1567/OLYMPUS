@@ -13,7 +13,10 @@ page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text());}
 page.on('pageerror',e=>errors.push(e.message));
 const project={project_id:'qa-cafe',name:'Rosales Café',created_at:1,updated_at:2,tenant_id:'qa'};
 const execution={execution_id:'qa-execution',project_id:'qa-cafe',task:'Construir Rosales Café',status:'completed',created_at:1,updated_at:2,error:null};
-const events=[{seq:1,event:'model_failover',at:1,payload:{from_provider:'qa-a',to_provider:'qa-b'}},{seq:2,event:'result_published',at:2,payload:{files_modified:['app/index.html'],verification:{success:true},api_key:'SYNTHETIC_SECRET_ONLY'}}];
+const events=[{seq:1,event:'mission_compiled',at:1,payload:{original_sha256:'initial-contract'}},
+ {seq:2,event:'model_failover',at:1,payload:{from_provider:'qa-a',to_provider:'qa-b'}},
+ ...Array.from({length:100},(_,i)=>({seq:i+3,event:'skill_applied',at:i+2,payload:{mode:'advisory_context',success:true}})),
+ {seq:103,event:'result_published',at:103,payload:{files_modified:['app/index.html'],delivery_review:{scope:'static_checks_only',browser:'pending',visual:'pending'},verification:{success:true},api_key:'SYNTHETIC_SECRET_ONLY'}}];
 let createFails=true;
 await context.route('**/*',async route=>{
  const url=new URL(route.request().url());
@@ -31,7 +34,12 @@ await context.route('**/*',async route=>{
  else if(path.endsWith('/versions'))data={versions:[]};
  else if(path.endsWith('/files'))data={files:[{path:'app/index.html',size:128,editable:true}]};
  else if(path.endsWith('/runtime/logs'))data={logs:[]};
- else if(path==='/cloud/saas/organization')data={role:'owner',organization:{name:'QA'}};
+ else if(path==='/cloud/saas/organization')data={organization_id:'qa-org',role:'owner',name:'Organização de teste'};
+ else if(path==='/cloud/saas/organizations')data={organizations:[{organization_id:'qa-org',role:'owner',name:'Organização de teste'}]};
+ else if(path==='/cloud/saas/members')data={members:[{user_id:'qa-owner',role:'owner',email:'pessoa.com.email.extenso@organizacao.example'},{user_id:'qa-builder',role:'builder',email:'outro.email.extenso@organizacao.example'}]};
+ else if(path==='/cloud/saas/usage')data={plan_id:'founder',subscription_status:'active',usage:{missions_month:2,deployments_month:0},limits:{missions_month:100,deployments_month:100,members:10}};
+ else if(path==='/cloud/saas/audit')data={events:[],chain_valid:true};
+ else if(path==='/skills')data={skills:[],categories:[],external_repositories:[]};
  else if(path==='/providers/catalog')data={providers:[{id:'fcc',name:'Free Claude Code',kind:'local',enabled:true,automatic:true,configured:true,status:'healthy',healthy:true,models:[],safe_free_model_count:2,priority:10,inference_ready:true}],plugins:[],routing_policy:{mode:'free_first',free_attempt_limit:4,paid_fallback_authorized:false,paid_spend_cap_usd:0},fallback_routes:[]};
  else if(path==='/providers/fcc/test')data={success:true,inference_ready:true,message:'Protocolo Olympus confirmado',provider:'fcc'};
  else if(path.startsWith('/providers/fcc'))data={success:true};
@@ -66,14 +74,19 @@ await check('diagnostic',async()=>{
  const toolbar=page.getByRole('toolbar',{name:'Diagnóstico técnico'});await expect(toolbar).toBeVisible();
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.qaCopied=text;}}}));
  await toolbar.getByRole('button',{name:'Copiar diagnóstico',exact:true}).click();const text=await page.evaluate(()=>window.qaCopied);assert.ok(text.includes('qa-execution'));assert.ok(text.includes('model_failover'));assert.ok(!text.includes('SYNTHETIC_SECRET_ONLY'));
+ assert.ok(text.includes('initial-contract'));
  const download=page.waitForEvent('download');await toolbar.getByRole('button',{name:'Baixar diagnóstico',exact:true}).click();await download;
  await expect(toolbar.getByRole('button',{name:'Compartilhar detalhes',exact:true})).toBeVisible();
- await page.goto(base+'/logs');await expect(page.getByRole('toolbar',{name:'Diagnóstico técnico'})).toBeVisible();
+ const history=await page.goto(base+'/execucoes');assert.equal(history.status(),200);
+ await page.getByRole('link',{name:/Construir Rosales Café/}).click();
+ await page.waitForURL('**/missao?project_id=qa-cafe');
+ await expect(page.getByRole('toolbar',{name:'Diagnóstico técnico'})).toBeVisible();
 });
 await check('mission_flow',async()=>{
  await page.goto(base+'/missao?project_id=qa-cafe');await expect(page.getByRole('button',{name:'Anexar arquivos'})).toBeVisible();
  for(const name of ['Visualizar','Arquivos','Versões','Publicar'])await expect(page.getByRole('button',{name,exact:true}).first()).toBeVisible();
  await page.getByRole('button',{name:'Arquivos',exact:true}).first().click();await expect(page.getByRole('dialog',{name:'Ambiente do projeto'})).toBeVisible();
+ await expect(page.getByText('OmniRoute automático',{exact:true})).toHaveCount(0);
  await expect(page.getByText('app/index.html',{exact:true}).first()).toBeVisible();await page.getByRole('button',{name:'Fechar ambiente do projeto'}).click();
  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop.png',fullPage:true});
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Baixar resultado',exact:true}).click();await download;
@@ -107,6 +120,17 @@ events.push({seq:3,event:'failed',at:3,failure_stage:'execution',error_type:'Val
 await page.goto(base+'/missao?project_id=qa-cafe');await page.getByText('Ver diagnóstico técnico',{exact:true}).click();
 await expect(page.locator('.mission-diagnostic')).toContainText('qa_runner.py');
 await expect(page.locator('.mission-diagnostic')).toContainText('failure_stage');
+});
+await check('accessible_layout',async()=>{
+ for(const width of [390,768,1440]){
+  await page.setViewportSize({width,height:1000});
+  for(const path of ['/missao','/projetos','/execucoes','/skills','/configuracoes']){
+   await page.goto(base+path);await page.waitForLoadState('networkidle');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),path+' overflows at '+width);
+   const missing=await page.locator('input,textarea,select').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&el.type!=='hidden'&&!el.getAttribute('aria-label')&&!el.getAttribute('aria-labelledby')&&!el.labels?.length).map(el=>el.outerHTML));
+   assert.deepEqual(missing,[],path+' unnamed controls at '+width);
+  }
+ }
 });
 console.log(JSON.stringify({browser:browser.version(),checks,page_errors:errors,console_errors:consoleErrors,requests}));
 } finally {await browser.close();}

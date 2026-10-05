@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from olympus.agent.mission import AutonomousPatchRunner, MissionSpec, MissionStep
 from olympus.routing.omniroute_adapter import OmniRouteAdapter
+from app.core.provider_runtime import build_delivery_verifier
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -99,6 +100,7 @@ def _run_mission(mission_id: str) -> None:
         runner = AutonomousPatchRunner(
             str(workspace),
             router_adapter,
+            verifier_factory=build_delivery_verifier,
             telemetry=lambda e: _event(mission_id, e.get("event", "runtime"), **{k: v for k, v in e.items() if k != "event"}),
         )
         result = runner.run(spec)

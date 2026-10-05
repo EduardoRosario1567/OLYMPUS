@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from olympus.routing.interfaces import (
     ModelCapability, RoutingExecutionResult, RoutingHealth, RoutingModelInfo,
 )
+from olympus.routing.image_inputs import validated_image_inputs, image_message
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,8 @@ class OpenAICompatibleAdapter:
                 continue
             result.append(RoutingModelInfo(
                 model_id=model_id, provider=self.config.provider_id,
-                capabilities=[ModelCapability.TEXTO, ModelCapability.CODIGO],
+                capabilities=[ModelCapability.TEXTO, ModelCapability.CODIGO] + (
+                    [ModelCapability.IMAGEM] if 'image' in (item.get('architecture') or {}).get('input_modalities', []) else []),
                 available=True, metadata={"raw": item},
             ))
         return result
@@ -152,11 +154,16 @@ class OpenAICompatibleAdapter:
         return "\n".join(texts)
 
     def execute(self, model_id, prompt, *, max_tokens=None, temperature=None, **kwargs):
+        try:
+            images = validated_image_inputs(kwargs.get('image_inputs'))
+        except ValueError:
+            return RoutingExecutionResult(model_id, '', self.config.provider_id, '', 0, 0.0,
+                                          False, 'invalid inline image input', {}, 'invalid_image_input')
         responses_api = self.config.wire_api == "responses"
         payload = (
-            {"model": model_id, "input": prompt}
+            {"model": model_id, "input": image_message(prompt, images, responses=True)}
             if responses_api else
-            {"model": model_id, "messages": [{"role": "user", "content": prompt}]}
+            {"model": model_id, "messages": [{"role": "user", "content": image_message(prompt, images)}]}
         )
         token_key = "max_output_tokens" if responses_api else "max_tokens"
         if max_tokens is not None:
@@ -279,7 +286,9 @@ class OpenAICompatibleAdapter:
             return RoutingExecutionResult(model_id, data.get("model", model_id), self.config.provider_id,
                                           output, latency, 0.0, True, None,
                                           {"http_status": status, "usage": data.get("usage"), "rate_limit_retries": retry_count,
-                                           "token_budget_repaired": token_budget_repaired}, "success")
+                                           "token_budget_repaired": token_budget_repaired,
+                                           "image_inputs_sent": len(images),
+                                           "actual_model_reported": isinstance(data.get('model'),str) and bool(data['model'].strip())}, "success")
         except Exception as exc:
             latency = max(1, int((time.monotonic() - started) * 1000))
             return RoutingExecutionResult(model_id, "", self.config.provider_id, "", latency, 0.0,

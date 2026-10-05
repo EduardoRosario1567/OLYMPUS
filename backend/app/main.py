@@ -21,8 +21,8 @@ from app.api import auth, dashboard, projects, executions, logs, missions, provi
 from app.api import skills_fabric
 
 validar_configuracao_producao()
-APP_VERSION = "3.0.8"
-APP_BUILD = "STABILITY-REGRESSION-P1"
+APP_VERSION = "3.0.9"
+APP_BUILD = "DELIVERY-QUALITY-RC1"
 app = FastAPI(title="Olympus API", version=APP_VERSION)
 
 origens = [item.strip() for item in os.environ.get(

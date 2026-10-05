@@ -8,6 +8,22 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(authorization|cookie|set-cookie)\s*:\s*[^\n]+/gi, "$1: [REDACTED]"],
 ];
 
+export function selectDiagnosticEvents<T extends { event: string }>(events: T[], limit = 80): T[] {
+  const essential = new Set(["mission_compiled", "routing_policy_selected", "model_selected",
+    "model_resume", "model_failover", "worker_requeued", "failed", "completion_rejected",
+    "verification_started", "verification_completed", "result_published", "step_blocked",
+    "mission_stop", "mission_end", "finished"]);
+  const selected = new Set(events.filter(event => essential.has(event.event)));
+  // Initial contract, all failovers and rejection evidence outrank repeated
+  // advisory-context events. If essentials exceed the display limit retain
+  // them all rather than silently losing the cause of a long mission.
+  for (const event of events.slice().reverse()) {
+    if (selected.size >= limit) break;
+    selected.add(event);
+  }
+  return events.filter(event => selected.has(event));
+}
+
 export function sanitizeDiagnostic(value: string): string {
   let text = String(value ?? "");
   for (const [pattern, replacement] of SECRET_PATTERNS) text = text.replace(pattern, replacement);

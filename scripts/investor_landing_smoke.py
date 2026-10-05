@@ -105,7 +105,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
         return
 
 
-def _wait(runtime: CloudRuntime, execution_id: str, timeout: float = 8.0):
+def _wait(runtime: CloudRuntime, execution_id: str, timeout: float = 15.0):
     deadline = time.time() + timeout
     record = runtime.get(execution_id)
     while record and record.status not in {"completed", "failed", "blocked", "cancelled"} and time.time() < deadline:

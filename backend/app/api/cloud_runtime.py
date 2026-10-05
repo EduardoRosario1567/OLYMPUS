@@ -22,7 +22,7 @@ from olympus.cloud.deployment import DeploymentCoordinator, SQLiteDeploymentReco
 from olympus.cloud.secret_vault import configured_secret_vault
 from olympus.cloud.railway_provider import RailwayIntegrationService, RailwayProvider, SQLiteRailwayDeploymentBindingStore
 from app.core.deps import identidade_com_permissao
-from app.core.provider_runtime import build_mission_routing, routing_policy
+from app.core.provider_runtime import build_mission_routing, build_visual_review_routing, build_delivery_verifier, routing_policy
 from app.core.saas import PLATFORM
 from olympus.saas.platform import EntitlementError
 
@@ -78,6 +78,10 @@ def _adaptive_model_timeout(task: str) -> int:
     return 60
 
 
+def _quality_verifier(workspace: str):
+    return build_delivery_verifier(workspace,routing_factory=build_visual_review_routing)
+
+
 def _runner_factory(workspace: str, telemetry):
     from olympus.skills.fabric import SkillsFabric
     policy_path = Path(workspace) / ".olympus" / "execution-policy.json"
@@ -109,6 +113,7 @@ def _runner_factory(workspace: str, telemetry):
         telemetry=telemetry,
         checkpoint_store=MissionCheckpointStore(workspace),
         skills_fabric=SkillsFabric(tenant_id=fabric_tenant),
+        verifier_factory=_quality_verifier,
         skill_registry=SkillRegistry((
             os.environ.get(
                 "OLYMPUS_SKILLS_DIR",
@@ -121,6 +126,7 @@ def _runner_factory(workspace: str, telemetry):
 _RUNTIME = CloudRuntime(
     os.environ.get("OLYMPUS_CLOUD_DATA_DIR", ".olympus/cloud"),
     _runner_factory,
+    verifier_factory=_quality_verifier,
     max_workers=int(os.environ.get("OLYMPUS_CLOUD_WORKERS", "2")),
     memory_store=build_memory_store(
         os.environ.get("OLYMPUS_MEMORY_DATABASE_URL")

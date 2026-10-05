@@ -60,13 +60,12 @@ class AgentLoop:
         if self.progress_callback is not None:
             self.progress_callback(state)
 
-    @staticmethod
-    def _metadata(state: AgentState, **updates: Any) -> dict:
+    def _metadata(self, state: AgentState, **updates: Any) -> dict:
         metadata = dict(state.metadata)
         metadata.update(updates)
         if "OLYMPUS_WEB_DELIVERY_V1" in state.task:
-            metadata["delivery_review"] = {"profile": "web-v1", "scope": "static_checks_only",
-                                           "browser": "pending", "visual": "pending"}
+            metadata["delivery_review"] = getattr(self.verifier, "delivery_review", None) or {
+                "profile": "web-v1", "scope": "static_checks_only", "browser": "pending", "visual": "not_assessed"}
         return metadata
 
     def _acceptance(self, state: AgentState):
@@ -111,8 +110,11 @@ class AgentLoop:
                         if isinstance(row, (list, tuple)) and len(row) >= 3
                     )
                 elif action_type == ActionType.READ_FILE.value:
-                    item["output"] = str(output or "")[:800]
-                    item["output_truncated"] = len(str(output or "")) > 800
+                    item["output"] = str(output or "")[:2400]
+                    item["output_truncated"] = len(str(output or "")) > 2400
+                    item["read_range"] = dict(getattr(observation, "metadata", {}).get("read_range") or {})
+                    if item["output_truncated"] or item["read_range"].get("next_start_line"):
+                        item["continuation"] = "Read the remaining lines using payload {start_line, max_lines}; omitted text is not evidence."
                 elif action_type == ActionType.RESEARCH_SOURCES.value and isinstance(output, dict):
                     item["output"] = dict(output, results=[
                         {key: (str(value)[:180] if key in ("description", "excerpt", "author") else value)
@@ -133,12 +135,16 @@ class AgentLoop:
                 state.metadata.get("completed_action_keys") or ()
             )[-24:],
             "completion_rule": "If the requested result is already complete, return the finish action now.",
+            "delivery_review": {
+                key: (state.metadata.get("delivery_review") or {}).get(key)
+                for key in ("scope", "browser", "layout", "visual", "content_sha256")
+            } if state.metadata.get("delivery_review") else None,
             "execution_directive": (
                 "Repair only the reported errors in the existing files, then verify."
                 if state.files_modified and state.errors else
                 "Verify the existing deliverable and finish; do not recreate completed work."
                 if state.files_modified else
-                "Create the smallest complete runnable deliverable now; refine it in later actions."
+                "Follow the delivery concept and produce the complete requested result; verify it before finish."
             ),
         }
         if skill_context:
@@ -192,12 +198,12 @@ class AgentLoop:
         # provider token.
         if initial_state is not None and state.files_modified:
             verification = self.verifier.verify(state.files_modified, state.tests_run)
+            acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
             quality_errors = self.verifier.verify_task_deliverable(
                 task,
                 state.files_modified,
                 tuple(self.skill_context.get("ids", ())),
             )
-            acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
             if verification.passed and not quality_errors and acceptance_ok:
                 state = state.transition(
                     AgentStatus.COMPLETED,
@@ -228,12 +234,12 @@ class AgentLoop:
         while not state.terminal:
             if state.iteration >= state.max_iterations:
                 verification = self.verifier.verify(state.files_modified, state.tests_run)
+                acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
                 quality_errors = self.verifier.verify_task_deliverable(
                     task,
                     state.files_modified,
                     tuple(self.skill_context.get("ids", ())),
                 )
-                acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
                 if state.files_modified and verification.passed and not quality_errors and acceptance_ok:
                     state = state.transition(
                         AgentStatus.COMPLETED,
@@ -283,11 +289,18 @@ class AgentLoop:
                     "failure_kind": kind.value,
                 })
                 acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
-                if kind == FailureKind.TECHNICAL and state.files_modified and acceptance_ok:
+                verification = self.verifier.verify(state.files_modified, state.tests_run)
+                quality_errors = self.verifier.verify_task_deliverable(
+                    task, state.files_modified, tuple(self.skill_context.get("ids", ())),
+                )
+                if (kind == FailureKind.TECHNICAL and state.files_modified and acceptance_ok
+                        and verification.passed and not quality_errors):
                     state = state.transition(
                         AgentStatus.COMPLETED,
+                        final_confidence=verification.report.confidence,
                         metadata=self._metadata(
                             state,
+                            verification=verification.report.to_dict(),
                             completion_reason="acceptance_verified_after_provider_error",
                             previous_attempt_error=message,
                             acceptance=[getattr(item, "line", lambda: str(item))() for item in acceptance_results],
@@ -299,7 +312,8 @@ class AgentLoop:
                 if kind == FailureKind.TECHNICAL:
                     state = state.transition(
                         AgentStatus.BLOCKED,
-                        errors=state.errors + (message,),
+                        errors=tuple(dict.fromkeys(state.errors + verification.errors
+                                                   + quality_errors + acceptance_errors + (message,))),
                         metadata=self._metadata(state, failure_kind=kind.value),
                     )
                 else:
@@ -359,6 +373,9 @@ class AgentLoop:
             if observation.success and action.type in (ActionType.CREATE_FILE, ActionType.PATCH_FILE) and action.target:
                 files_modified = tuple(dict.fromkeys(files_modified + (action.target,)))
                 repo_map = build_repo_map(self.root)
+            if observation.success and action.type == ActionType.IMPORT_ASSET:
+                files_modified = tuple(dict.fromkeys(files_modified + tuple(observation.metadata.get("files_modified", ()))))
+                repo_map = build_repo_map(self.root)
             # A rejected validation is evidence of a failed action, not a test
             # that ran.  Persisting it here caused the final verifier to replay
             # invalid model-supplied targets and abort the whole mission.
@@ -412,12 +429,12 @@ class AgentLoop:
 
             if action.type == ActionType.FINISH or repeated_inspection:
                 verification = self.verifier.verify(files_modified, tests_run)
+                acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
                 quality_errors = self.verifier.verify_task_deliverable(
                     task,
                     files_modified,
                     tuple(self.skill_context.get("ids", ())),
                 )
-                acceptance_ok, acceptance_errors, acceptance_results = self._acceptance(state)
                 if verification.passed and not quality_errors and acceptance_ok:
                     state = state.transition(
                         AgentStatus.COMPLETED,

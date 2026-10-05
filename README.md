@@ -1,6 +1,6 @@
-# Olympus 3.0.8 — estabilidade e regressão
+# Olympus 3.0.9 — qualidade de entrega
 
-Build STABILITY-REGRESSION-P1. Fonte consolidada com segurança P0, catálogo,
+Build DELIVERY-QUALITY-RC1 (candidata consolidada; publicação em main depende do gate de CI com navegador real). Fonte consolidada com segurança P0, catálogo,
 Superpowers 6.4.2 e conceito de entrega/fontes preservados. Este ajuste corrige
 inicialização da interface, preview local, marca, erro de criação de projeto,
 registro e exibição de exceções, e proteção contra troca de processo no reinício.

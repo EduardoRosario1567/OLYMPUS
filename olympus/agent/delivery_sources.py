@@ -28,6 +28,19 @@ class DeliverySources:
     MAX_BYTES = 1024 * 1024
     LANGUAGES = ('pt', 'en', 'es', 'fr', 'de', 'it')
 
+    def _image_bytes(self, url, mime):
+        if not _public_url(url, 'upload.wikimedia.org'):
+            raise ValueError('image host refused')
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+        request = urllib.request.Request(url, headers={'User-Agent': 'Olympus/3.0.8 (local-asset-import)', 'Accept': mime})
+        with opener.open(request, timeout=8) as response:
+            if response.headers.get_content_type() != mime:
+                raise ValueError('image content type mismatch')
+            body = response.read(8 * 1024 * 1024 + 1)
+            if len(body) > 8 * 1024 * 1024:
+                raise ValueError('image exceeds 8 MiB')
+        return body
+
     def _json(self, url):
         # Fixed API hosts, no redirects and no inherited proxy credentials.
         host = urllib.parse.urlsplit(url).hostname

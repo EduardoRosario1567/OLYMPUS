@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence, Tuple
 
 from olympus.agent.test_runner import TargetedTestRunner
+from olympus.agent.browser_delivery import WebDeliveryVerifier
 from olympus.agent.verification_engine import (
     CheckStatus,
     VerificationCheck,
@@ -48,10 +49,13 @@ class _WebQualityParser(HTMLParser):
 
 
 class AgentVerifier:
-    def __init__(self, root: str) -> None:
+    def __init__(self, root: str, visual_reviewer=None) -> None:
         self.root = Path(root).resolve()
         self.test_runner = TargetedTestRunner(str(self.root))
         self.engine = VerificationEngine()
+        self.browser_verifier = WebDeliveryVerifier(self.root)
+        self.delivery_review = None
+        self.visual_reviewer = visual_reviewer
 
     def verify_task_deliverable(
         self,
@@ -60,6 +64,7 @@ class AgentVerifier:
         active_skills: Sequence[str] = (),
     ) -> Tuple[str, ...]:
         """Reject syntactically valid web placeholders that do not satisfy the request."""
+        self.delivery_review = None
         objective = str(task or "").lower()
         requires_concept = "olympus_web_delivery_v1" in objective
         if objective.startswith("olympus_execution_contract\n"):
@@ -326,6 +331,20 @@ class AgentVerifier:
                 errors.append("provide alt text for every image")
 
         if not errors:
+            if requires_concept:
+                browser_errors, self.delivery_review = self.browser_verifier.verify(primary)
+                if not browser_errors and self.visual_reviewer is not None:
+                    try:
+                        images = self.browser_verifier.evidence_images(self.delivery_review['content_sha256'])
+                        concept = (self.root/'docs/delivery-concept.md').read_text(encoding='utf-8')
+                        visual_errors, opinion = self.visual_reviewer.review(task,concept,self.delivery_review,images)
+                        if not self.browser_verifier.content_matches(primary,self.delivery_review['content_sha256']):
+                            visual_errors, opinion = self.visual_reviewer.unavailable('delivery_changed during visual inspection')
+                    except (OSError,ValueError,KeyError):
+                        visual_errors, opinion = self.visual_reviewer.unavailable('screenshot evidence could not be verified')
+                    self.delivery_review = dict(self.delivery_review, visual=opinion['status'],visual_review=opinion)
+                    return visual_errors
+                return browser_errors
             return ()
         return ("deliverable quality: " + "; ".join(errors),)
 

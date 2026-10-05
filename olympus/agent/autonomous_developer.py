@@ -40,6 +40,7 @@ class AutonomousDeveloper:
         checkpoint_store: Optional[MissionCheckpointStore] = None,
         skill_registry: Optional[SkillRegistry] = None,
         skills_fabric: Optional[Any] = None,
+        verifier_factory=None,
     ) -> None:
         self.root = str(Path(root).resolve())
         self.skill_registry = skill_registry or SkillRegistry()
@@ -50,6 +51,7 @@ class AutonomousDeveloper:
             telemetry=telemetry,
             checkpoint_store=checkpoint_store,
             skill_registry=self.skill_registry,
+            verifier_factory=verifier_factory,
         )
         if skills_fabric is not None:
             from olympus.agent.planner import ModelPlanner

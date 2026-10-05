@@ -20,17 +20,12 @@ jobs:
           node-version: "20"
 
       - name: Instalar dependências do backend
-        run: pip install -r backend/requirements.txt pytest
+        run: pip install -r requirements-core.txt -r backend/requirements.txt pytest
 
       - name: Preparar .env
         run: |
           cp backend/.env.example backend/.env
           sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
-
-      - name: Rodar suíte de testes (unittest via pytest)
-        run: |
-          export PYTHONPATH=.
-          pytest tests/ -v
 
       - name: Verificar sintaxe Python
         run: python -m compileall -q backend olympus scripts
@@ -42,11 +37,11 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
-          npx playwright install chromium
+          npx playwright install --with-deps chromium
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           python3 scripts/release_gate.py
 
       - name: Publicar relatório do gate
@@ -59,7 +54,7 @@ jobs:
 
       - name: Subir backend em background
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
@@ -82,12 +77,12 @@ jobs:
 
       - name: Seed — primeira execução (cria dados)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           python3 scripts/seed_demo.py
 
       - name: Seed — segunda execução (deve ser idempotente, não duplicar)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           SAIDA=$(python3 scripts/seed_demo.py)
           echo "$SAIDA"
           echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
@@ -102,21 +97,9 @@ jobs:
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Chamar endpoints protegidos com o token real
+      - name: APIs atuais autenticadas e rejeição sem token
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-
-      - name: Confirmar que endpoint protegido rejeita sem token (401)
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
-          [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
+          python3 scripts/http_contract_gate.py
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
         if: always()

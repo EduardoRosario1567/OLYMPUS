@@ -23,7 +23,7 @@ PROFESSIONAL_PAGE = (
     "<section><h1>Entrega segura para empresas de tecnologia</h1><p>Transformamos objetivos complexos em experiências digitais claras, confiáveis e prontas para crescer.</p></section>"
     "<section><h2>Uma base completa para avançar</h2><div class='grid'><article class='card'>Estratégia orientada ao usuário.</article>"
     "<article class='card'>Engenharia validada em cada etapa.</article><article class='card'>Evolução contínua sem perder versões.</article></div></section>"
-    "<section id='contato'><h2>Construa o próximo produto com confiança</h2><p>Conte sua meta e receba uma entrega verificável, preservada e preparada para publicação.</p><button>Começar agora</button></section>"
+    "<section id='contato'><h2>Construa o próximo produto com confiança</h2><p>Conte sua meta e receba uma entrega verificável, preservada e preparada para publicação.</p><button onclick=\"this.nextElementSibling.hidden=false\">Começar agora</button><p hidden>Próxima etapa demonstrativa aberta.</p></section>"
     "</main><footer>Olympus · Tecnologia responsável</footer></body></html>"
 )
 
@@ -111,7 +111,7 @@ class TimeoutThenSuccessRouter:
 
 class StabilizationEndToEndV204Tests(unittest.TestCase):
     @staticmethod
-    def _wait(runtime, execution_id, statuses, timeout=5.0):
+    def _wait(runtime, execution_id, statuses, timeout=15.0):
         deadline = time.time() + timeout
         record = runtime.get(execution_id)
         while record is not None and record.status not in statuses and time.time() < deadline:

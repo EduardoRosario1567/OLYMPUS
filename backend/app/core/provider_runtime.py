@@ -1054,3 +1054,20 @@ def build_mission_routing(timeout_seconds: float, policy_override=None):
         adapter,
         OlympusModelSelector(routes),
     )
+
+
+def build_visual_review_routing(timeout_seconds=20):
+    """Use existing administrator-selected free routes; never paid fallback."""
+    registry = build_provider_registry(timeout_seconds)
+    routes = configured_free_routes(registry)
+    eligible = tuple(route.id for route in capacity_filter_routes(routes) if route.tier in {'free','local'})
+    adapter = CapacityAwareRoutingAdapter(MultiProviderRoutingAdapter(registry,default_provider='omniroute'))
+    return adapter, eligible
+
+
+def build_delivery_verifier(workspace, routing_factory=None):
+    """Shared HUB quality boundary for project missions and the older tester."""
+    from olympus.agent.verifier import AgentVerifier
+    from olympus.agent.visual_delivery import VisualDeliveryReviewer
+    return AgentVerifier(workspace,visual_reviewer=VisualDeliveryReviewer(
+        routing_factory=routing_factory or build_visual_review_routing))
