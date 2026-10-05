@@ -27,6 +27,7 @@ jobs:
           cp backend/.env.example backend/.env
           sed -i 's/OLYMPUS_ADMIN_EMAIL=.*/OLYMPUS_ADMIN_EMAIL=admin@olympus.local/' backend/.env
           sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+          sed -i 's/OLYMPUS_JWT_SECRET=.*/OLYMPUS_JWT_SECRET=ci-release-gate-secret-0123456789abcdef0123456789abcdef/' backend/.env
 
       - name: Verificar sintaxe Python
         run: python -m compileall -q backend olympus scripts
