@@ -56,7 +56,7 @@ jobs:
 
       - name: Subir backend em background
         run: |
-          export PYTHONPATH=.:backend
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/backend"
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
