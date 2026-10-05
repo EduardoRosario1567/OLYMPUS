@@ -8,6 +8,7 @@ import { api, ApiError, type CloudAttachment, type CloudDeployment, type CloudEv
 import { useRequireAuth } from "@/hooks/useAuth";
 import { sanitizeDiagnostic, selectDiagnosticEvents } from "@/lib/diagnostic-share";
 import { DiagnosticActions } from "@/components/technical-share-tools";
+import olympusVersion from "@/public/olympus-version.json";
 import { useSearchParams } from "next/navigation";
 
 const TERMINAL = new Set(["completed", "failed", "blocked", "cancelled", "paused_capacity", "waiting_capacity"]);
@@ -514,7 +515,7 @@ function Conversation({ task, attachments, execution, statusText, elapsed, event
   const visibleEvents = events.map((event) => EVENT_LABELS[event.event]).filter((label): label is string => Boolean(label)).slice(-5);
   const technicalEvents = selectDiagnosticEvents(events.filter((event) => ["mission_compiled", "routing_policy_selected", "step_start", "model_selected", "model_resume", "model_failover", "worker_requeued", "failed", "skill_selected", "skill_applied", "skill_fallback", "step_end", "step_blocked", "verification_started", "verification_completed", "completion_rejected", "result_published", "mission_stop", "mission_end", "finished"].includes(event.event)));
   const diagnosticText = sanitizeDiagnostic([
-    "OLYMPUS 3.0.8 - DIAGNÓSTICO DE EXECUÇÃO",
+    `OLYMPUS ${olympusVersion.version} - DIAGNÓSTICO DE EXECUÇÃO`,
     `Execução: ${execution.execution_id}`,
     `Status: ${execution.status}`,
     `Erro: ${execution.error ?? ""}`,

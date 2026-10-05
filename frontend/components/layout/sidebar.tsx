@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type CloudProject } from "@/services/api";
+import olympusVersion from "@/public/olympus-version.json";
 
 type SidebarProps = { className?: string; onNavigate?: () => void; [key: string]: unknown };
 
@@ -16,7 +17,7 @@ export function Brand({ className = "" }: { className?: string; [key: string]: u
     <img src="/olympus-mark.png?v=2.6.2" alt="Olympus" className="olympus-logo h-11 w-11 shrink-0 object-contain" />
     <div>
       <div className="text-[15px] font-bold italic tracking-[0.18em]">OLYMPUS</div>
-      <div className="mt-0.5 text-[10px] text-zinc-400">OLYMPUS 3.0.9</div>
+      <div className="mt-0.5 text-[10px] text-zinc-400">OLYMPUS {olympusVersion.version}</div>
     </div>
   </div>;
 }
@@ -148,7 +149,7 @@ export function MobileNav() {
         <Icon><path d="M4 7h16M4 12h16M4 17h16" /></Icon>
       </button>
       <span className="ml-3 text-sm font-bold italic tracking-[0.16em] text-zinc-800">OLYMPUS</span>
-      <span className="ml-2 text-[10px] text-zinc-400">3.0.9</span>
+      <span className="ml-2 text-[10px] text-zinc-400">{olympusVersion.version}</span>
     </div>
     {open && <div className="fixed inset-0 z-50 flex">
       <button type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/30" />

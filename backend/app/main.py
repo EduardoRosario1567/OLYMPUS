@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -21,8 +22,39 @@ from app.api import auth, dashboard, projects, executions, logs, missions, provi
 from app.api import skills_fabric
 
 validar_configuracao_producao()
-APP_VERSION = "3.0.9"
-APP_BUILD = "DELIVERY-QUALITY-RC2"
+
+_VERSION_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "frontend"
+    / "public"
+    / "olympus-version.json"
+)
+
+try:
+    _VERSION_INFO = json.loads(
+        _VERSION_FILE.read_text(encoding="utf-8")
+    )
+    APP_VERSION = str(_VERSION_INFO["version"]).strip()
+    APP_BUILD = str(_VERSION_INFO["build"]).strip()
+
+    if (
+        _VERSION_INFO.get("product") != "olympus"
+        or not APP_VERSION
+        or not APP_BUILD
+    ):
+        raise ValueError("invalid version identity")
+
+except (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    json.JSONDecodeError,
+) as exc:
+    raise RuntimeError(
+        "Identidade de versão OLYMPUS inválida: %s" % exc
+    ) from exc
+
 app = FastAPI(title="Olympus API", version=APP_VERSION)
 
 origens = [item.strip() for item in os.environ.get(

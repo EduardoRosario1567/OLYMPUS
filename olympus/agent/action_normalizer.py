@@ -19,6 +19,7 @@ _PATCH_OPERATIONS = {
     "insert_before_symbol",
     "replace_function",
     "append_block",
+    "replace_text",
 }
 
 _PATCH_PAYLOAD_KEYS = {
@@ -27,6 +28,7 @@ _PATCH_PAYLOAD_KEYS = {
     "symbol",
     "start_line",
     "end_line",
+    "old_text",
 }
 
 _ALIASES = {
@@ -140,6 +142,17 @@ def normalize_patch_payload(payload: Any) -> Dict[str, Any]:
 
     if "new_content" not in data and "content" in data:
         data["new_content"] = data["content"]
+
+    if "new_content" not in data and "new_text" in data:
+        data["new_content"] = data["new_text"]
+
+    if (
+        "operation" not in data
+        and "old_text" in data
+        and "new_content" in data
+    ):
+        data["operation"] = "replace_text"
+
     if "operation" not in data and "edit" in data:
         data["operation"] = data["edit"]
     if "symbol" not in data and "function" in data:
@@ -151,7 +164,7 @@ def normalize_patch_payload(payload: Any) -> Dict[str, Any]:
     for key in _TARGET_KEYS:
         data.pop(key, None)
 
-    for alias in ("content", "edit", "function"):
+    for alias in ("content", "new_text", "edit", "function"):
         data.pop(alias, None)
 
     unknown = sorted(set(data) - _PATCH_PAYLOAD_KEYS)
@@ -171,6 +184,13 @@ def normalize_patch_payload(payload: Any) -> Dict[str, Any]:
         or not isinstance(data["new_content"], str)
     ):
         raise ValueError("patch_file requires string new_content")
+
+    if operation == "replace_text":
+        old_text = data.get("old_text")
+        if not isinstance(old_text, str) or not old_text:
+            raise ValueError(
+                "patch_file replace_text requires non-empty old_text"
+            )
 
     if operation == "replace_lines":
         start = data.get("start_line")

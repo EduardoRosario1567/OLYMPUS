@@ -89,6 +89,79 @@ class TestActionNormalizerV203(unittest.TestCase):
             },
         )
 
+    def test_patch_payload_accepts_unique_old_text_new_text(self):
+        action = normalize_action_data({
+            "type": "patch_file",
+            "target": "src/main.py",
+            "payload": {
+                "old_text": "value = 1",
+                "new_text": "value = 7",
+            },
+        })
+
+        self.assertEqual(
+            action.payload,
+            {
+                "operation": "replace_text",
+                "old_text": "value = 1",
+                "new_content": "value = 7",
+            },
+        )
+
+    def test_executor_replace_text_is_exact_and_rejects_ambiguity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+
+            target = root / "src" / "main.py"
+            target.write_text(
+                "value = 1\nother = 2\n",
+                encoding="utf-8",
+            )
+
+            action = normalize_action_data({
+                "type": "patch_file",
+                "target": "src/main.py",
+                "payload": {
+                    "old_text": "value = 1",
+                    "new_text": "value = 7",
+                },
+            })
+
+            observation = ActionExecutor(tmp).execute(action)
+
+            self.assertTrue(observation.success, observation.error)
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                "value = 7\nother = 2\n",
+            )
+
+            target.write_text(
+                "value = 1\nvalue = 1\n",
+                encoding="utf-8",
+            )
+
+            ambiguous = normalize_action_data({
+                "type": "patch_file",
+                "target": "src/main.py",
+                "payload": {
+                    "old_text": "value = 1",
+                    "new_text": "value = 9",
+                },
+            })
+
+            rejected = ActionExecutor(tmp).execute(ambiguous)
+
+            self.assertFalse(rejected.success)
+            self.assertIn(
+                "exactly one old_text match",
+                rejected.error,
+            )
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                "value = 1\nvalue = 1\n",
+            )
+
     def test_patch_payload_rejects_free_text(self):
         with self.assertRaisesRegex(
             ValueError,

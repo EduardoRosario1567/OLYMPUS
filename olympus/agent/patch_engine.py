@@ -18,6 +18,7 @@ class PatchRequest:
     symbol: Optional[str] = None
     start_line: Optional[int] = None
     end_line: Optional[int] = None
+    old_text: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -28,7 +29,7 @@ class PatchResult:
 
 
 class PatchEngine:
-    OPERATIONS = {"replace_lines", "insert_after_symbol", "insert_before_symbol", "replace_function", "append_block"}
+    OPERATIONS = {"replace_lines", "insert_after_symbol", "insert_before_symbol", "replace_function", "append_block", "replace_text"}
 
     def __init__(self, root: str, allowed_paths=(), max_changed_lines: int = 200) -> None:
         self.root = Path(root).resolve()
@@ -60,10 +61,50 @@ class PatchEngine:
             raise PatchEngineError("unsupported operation")
         path = self._path(request.file)
         source = path.read_text(encoding="utf-8")
-        lines = source.splitlines()
         new_lines = request.new_content.splitlines()
+
         if len(new_lines) > self.max_changed_lines:
             raise PatchEngineError("patch exceeds changed-line limit")
+
+        if request.operation == "replace_text":
+            if not request.old_text:
+                raise PatchEngineError("old_text is required")
+
+            old_lines = request.old_text.splitlines()
+
+            if len(old_lines) > self.max_changed_lines:
+                raise PatchEngineError("patch exceeds changed-line limit")
+
+            matches = source.count(request.old_text)
+
+            if matches != 1:
+                raise PatchEngineError(
+                    "replace_text requires exactly one old_text match"
+                )
+
+            text = source.replace(
+                request.old_text,
+                request.new_content,
+                1,
+            )
+
+            if path.suffix == ".py":
+                try:
+                    ast.parse(text)
+                except SyntaxError as exc:
+                    raise PatchEngineError(
+                        "patched Python is invalid: %s" % exc
+                    )
+
+            path.write_text(text, encoding="utf-8")
+
+            return PatchResult(
+                request.file,
+                request.operation,
+                max(len(old_lines), len(new_lines), 1),
+            )
+
+        lines = source.splitlines()
 
         if request.operation == "append_block":
             updated = lines + ([""] if lines and lines[-1] else []) + new_lines
