@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from olympus.agent.actions import ActionType, AgentAction
+from olympus.agent.action_normalizer import normalize_patch_payload
 from olympus.agent.autonomy import AutonomyDecision, AutonomyPolicy
 from olympus.agent.patch_engine import PatchEngine, PatchRequest
 from olympus.agent.safe_apply import apply
@@ -96,8 +97,10 @@ class ActionExecutor:
                 payload = "=== FILE: %s ===\n%s" % (action.target, content)
                 output = apply(str(self.root), payload, [action.target])
             elif action.type == ActionType.PATCH_FILE:
-                data = dict(action.payload or {})
-                output = self.patch_engine.apply(PatchRequest(file=action.target, **data))
+                data = normalize_patch_payload(action.payload)
+                output = self.patch_engine.apply(
+                    PatchRequest(file=action.target, **data)
+                )
             elif action.type == ActionType.RUN_TEST:
                 modules = action.payload if isinstance(action.payload, (list, tuple)) else [str(action.payload)]
                 output = self.test_runner.run_unittest(modules)

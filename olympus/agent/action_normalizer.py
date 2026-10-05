@@ -13,6 +13,22 @@ _PAYLOAD_KEYS = (
     "payload", "arguments", "args", "params", "parameters", "content", "input",
 )
 
+_PATCH_OPERATIONS = {
+    "replace_lines",
+    "insert_after_symbol",
+    "insert_before_symbol",
+    "replace_function",
+    "append_block",
+}
+
+_PATCH_PAYLOAD_KEYS = {
+    "operation",
+    "new_content",
+    "symbol",
+    "start_line",
+    "end_line",
+}
+
 _ALIASES = {
     "research_sources": ActionType.RESEARCH_SOURCES,
     "read": ActionType.READ_FILE,
@@ -102,6 +118,87 @@ def _pick(data: Dict[str, Any], keys: Iterable[str], default: Any = None) -> Any
     return default
 
 
+def normalize_patch_payload(payload: Any) -> Dict[str, Any]:
+    """Canonicalize and validate model-supplied patch_file arguments.
+
+    Invalid model output must be rejected while still inside the planner
+    contract so the normal repair pass can ask the same model for a corrected
+    action. The executor calls this function again as defense in depth.
+    """
+    if isinstance(payload, str):
+        try:
+            decoded = json.loads(payload)
+        except (TypeError, ValueError):
+            decoded = None
+        if isinstance(decoded, dict):
+            payload = decoded
+
+    if not isinstance(payload, dict):
+        raise ValueError("patch_file payload must be an object")
+
+    data = dict(payload)
+
+    if "new_content" not in data and "content" in data:
+        data["new_content"] = data["content"]
+    if "operation" not in data and "edit" in data:
+        data["operation"] = data["edit"]
+    if "symbol" not in data and "function" in data:
+        data["symbol"] = data["function"]
+
+    # A model may repeat the file destination inside its argument object.
+    # target is already canonicalized separately and must never leak into
+    # PatchRequest as an unexpected keyword.
+    for key in _TARGET_KEYS:
+        data.pop(key, None)
+
+    for alias in ("content", "edit", "function"):
+        data.pop(alias, None)
+
+    unknown = sorted(set(data) - _PATCH_PAYLOAD_KEYS)
+    if unknown:
+        raise ValueError(
+            "patch_file payload has unsupported fields: %s"
+            % ", ".join(unknown)
+        )
+
+    operation = str(data.get("operation") or "").strip()
+    if operation not in _PATCH_OPERATIONS:
+        raise ValueError("patch_file requires a supported operation")
+    data["operation"] = operation
+
+    if (
+        "new_content" not in data
+        or not isinstance(data["new_content"], str)
+    ):
+        raise ValueError("patch_file requires string new_content")
+
+    if operation == "replace_lines":
+        start = data.get("start_line")
+        end = data.get("end_line")
+        if (
+            type(start) is not int
+            or type(end) is not int
+            or start < 1
+            or end < start
+        ):
+            raise ValueError(
+                "patch_file replace_lines requires valid start_line/end_line"
+            )
+
+    if operation in {
+        "insert_after_symbol",
+        "insert_before_symbol",
+        "replace_function",
+    }:
+        symbol = data.get("symbol")
+        if not isinstance(symbol, str) or not symbol.strip():
+            raise ValueError(
+                "patch_file symbol operation requires symbol"
+            )
+
+    return data
+
+
 def normalize_action_data(data: Any) -> AgentAction:
     obj = _unwrap(_compact(data))
     arguments = obj.get("arguments")
@@ -146,14 +243,8 @@ def normalize_action_data(data: Any) -> AgentAction:
             )
             if content is not None:
                 payload = content
-    if action_type == ActionType.PATCH_FILE and isinstance(payload, dict):
-        payload = dict(payload)
-        if "new_content" not in payload and "content" in payload:
-            payload["new_content"] = payload["content"]
-        if "operation" not in payload and "edit" in payload:
-            payload["operation"] = payload["edit"]
-        if "symbol" not in payload and "function" in payload:
-            payload["symbol"] = payload["function"]
+    if action_type == ActionType.PATCH_FILE:
+        payload = normalize_patch_payload(payload)
 
     return AgentAction(
         action_type,
