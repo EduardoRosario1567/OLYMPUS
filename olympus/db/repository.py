@@ -151,6 +151,232 @@ class PostgresRepository:
             for l in logs
         ]
 
+    # ---- execution_results (PATCH 004B) ----
+
+    def registrar_execution_result(
+        self,
+        *,
+        execution_id: str,
+        decision_record_id: str,
+        requested_model: str,
+        actual_model: str,
+        provider: str,
+        output: str,
+        latency_ms: int,
+        cost: float,
+        success: bool,
+        error: Optional[str] = None,
+        status: str = "success",
+        correlation_id: Optional[str] = None,
+        usage: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste um resultado de execução real e retorna seu id."""
+        result = db.ExecutionResult(
+            execution_id=execution_id,
+            decision_record_id=decision_record_id,
+            requested_model=requested_model,
+            actual_model=actual_model,
+            provider=provider,
+            output=output,
+            latency_ms=latency_ms,
+            cost=0.0 if cost is None else cost,
+            success=1 if success else 0,
+            error=error,
+            status=status,
+            correlation_id=correlation_id,
+            usage=usage or {},
+            metadata_=metadata or {},
+        )
+        self.session.add(result)
+        self.session.flush()
+        return str(result.id)
+
+    def obter_execution_result(self, result_id: str) -> Optional[dict]:
+        """Obtém um resultado de execução por id."""
+        result = self.session.get(db.ExecutionResult, result_id)
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_id": str(result.execution_id),
+            "decision_record_id": str(result.decision_record_id),
+            "requested_model": result.requested_model,
+            "actual_model": result.actual_model,
+            "provider": result.provider,
+            "output": result.output,
+            "latency_ms": result.latency_ms,
+            "cost": float(result.cost),
+            "success": bool(result.success),
+            "error": result.error,
+            "status": result.status,
+            "correlation_id": result.correlation_id,
+            "usage": result.usage,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def obter_execution_result_por_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém o resultado de execução associado a um decision_record_id."""
+        result = (
+            self.session.query(db.ExecutionResult)
+            .filter(db.ExecutionResult.decision_record_id == decision_record_id)
+            .first()
+        )
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_id": str(result.execution_id),
+            "decision_record_id": str(result.decision_record_id),
+            "requested_model": result.requested_model,
+            "actual_model": result.actual_model,
+            "provider": result.provider,
+            "output": result.output,
+            "latency_ms": result.latency_ms,
+            "cost": float(result.cost),
+            "success": bool(result.success),
+            "error": result.error,
+            "status": result.status,
+            "correlation_id": result.correlation_id,
+            "usage": result.usage,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def obter_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém um registro de decisão por id."""
+        from olympus.db import models as db
+        registro = self.session.get(db.DecisaoRegistro, decision_record_id)
+        if registro is None:
+            return None
+        return {
+            "id": str(registro.id),
+            "project_id": str(registro.project_id) if registro.project_id else None,
+            "task_id": registro.task_id,
+            "execution_id": str(registro.execution_id) if registro.execution_id else None,
+            "input_type": registro.input_type,
+            "task_description": registro.task_description,
+            "selected_provider": registro.selected_provider,
+            "selected_model": registro.selected_model,
+            "candidate_models": registro.candidate_models,
+            "policy_applied": registro.policy_applied,
+            "decision_reason": registro.decision_reason,
+            "confidence_score": float(registro.confidence_score),
+            "estimated_cost": float(registro.estimated_cost),
+            "estimated_latency_ms": registro.estimated_latency_ms,
+            "status": registro.status.value if registro.status else None,
+            "created_at": registro.created_at.isoformat() if registro.created_at else None,
+            "updated_at": registro.updated_at.isoformat() if registro.updated_at else None,
+        }
+
+    def listar_execution_results(
+        self,
+        limit: int = 50,
+        execution_id: Optional[str] = None,
+        decision_record_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista resultados de execução com filtros opcionais."""
+        query = self.session.query(db.ExecutionResult)
+        if execution_id is not None:
+            query = query.filter(db.ExecutionResult.execution_id == execution_id)
+        if decision_record_id is not None:
+            query = query.filter(db.ExecutionResult.decision_record_id == decision_record_id)
+        results = query.order_by(db.ExecutionResult.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": str(r.id),
+                "execution_id": str(r.execution_id),
+                "decision_record_id": str(r.decision_record_id),
+                "requested_model": r.requested_model,
+                "actual_model": r.actual_model,
+                "provider": r.provider,
+                "output": r.output,
+                "latency_ms": r.latency_ms,
+                "cost": float(r.cost),
+                "success": bool(r.success),
+                "error": r.error,
+                "status": r.status,
+                "correlation_id": r.correlation_id,
+                "usage": r.usage,
+                "metadata": r.metadata_,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in results
+        ]
+
+    # ---- quality_evaluations (PATCH 005D) ----
+
+    def registrar_quality_evaluation(
+        self,
+        *,
+        execution_result_id: str,
+        quality_score: float,
+        passed: bool,
+        evaluator: str,
+        reason: str,
+        criteria: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste uma avaliação de qualidade e retorna seu id."""
+        from olympus.db import models as db
+        eval_obj = db.QualityEvaluation(
+            execution_result_id=execution_result_id,
+            quality_score=quality_score,
+            passed=1 if passed else 0,
+            evaluator=evaluator,
+            reason=reason,
+            criteria=criteria or {},
+            metadata_=metadata or {},
+        )
+        self.session.add(eval_obj)
+        self.session.flush()
+        return str(eval_obj.id)
+
+    def obter_quality_evaluation(self, evaluation_id: str) -> Optional[dict]:
+        """Obtém uma avaliação de qualidade por id."""
+        from olympus.db import models as db
+        result = self.session.get(db.QualityEvaluation, evaluation_id)
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_result_id": str(result.execution_result_id),
+            "quality_score": float(result.quality_score),
+            "passed": bool(result.passed),
+            "evaluator": result.evaluator,
+            "reason": result.reason,
+            "criteria": result.criteria,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def listar_quality_evaluations(
+        self,
+        limit: int = 50,
+        execution_result_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista avaliações de qualidade com filtros opcionais."""
+        from olympus.db import models as db
+        query = self.session.query(db.QualityEvaluation)
+        if execution_result_id is not None:
+            query = query.filter(db.QualityEvaluation.execution_result_id == execution_result_id)
+        results = query.order_by(db.QualityEvaluation.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": str(r.id),
+                "execution_result_id": str(r.execution_result_id),
+                "quality_score": float(r.quality_score),
+                "passed": bool(r.passed),
+                "evaluator": r.evaluator,
+                "reason": r.reason,
+                "criteria": r.criteria,
+                "metadata": r.metadata_,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in results
+        ]
+
     def listar_execucoes_recentes(self, limit: int = 20) -> list[dict]:
         """Mantido por compatibilidade (usado pelo dashboard da Fase 2.1)."""
         return self.listar_execucoes(limit=limit)
@@ -331,4 +557,230 @@ class PostgresRepository:
                 "created_at": l.created_at.isoformat(),
             }
             for l in logs
+        ]
+
+    # ---- execution_results (PATCH 004B) ----
+
+    def registrar_execution_result(
+        self,
+        *,
+        execution_id: str,
+        decision_record_id: str,
+        requested_model: str,
+        actual_model: str,
+        provider: str,
+        output: str,
+        latency_ms: int,
+        cost: float,
+        success: bool,
+        error: Optional[str] = None,
+        status: str = "success",
+        correlation_id: Optional[str] = None,
+        usage: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste um resultado de execução real e retorna seu id."""
+        result = db.ExecutionResult(
+            execution_id=execution_id,
+            decision_record_id=decision_record_id,
+            requested_model=requested_model,
+            actual_model=actual_model,
+            provider=provider,
+            output=output,
+            latency_ms=latency_ms,
+            cost=0.0 if cost is None else cost,
+            success=1 if success else 0,
+            error=error,
+            status=status,
+            correlation_id=correlation_id,
+            usage=usage or {},
+            metadata_=metadata or {},
+        )
+        self.session.add(result)
+        self.session.flush()
+        return str(result.id)
+
+    def obter_execution_result(self, result_id: str) -> Optional[dict]:
+        """Obtém um resultado de execução por id."""
+        result = self.session.get(db.ExecutionResult, result_id)
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_id": str(result.execution_id),
+            "decision_record_id": str(result.decision_record_id),
+            "requested_model": result.requested_model,
+            "actual_model": result.actual_model,
+            "provider": result.provider,
+            "output": result.output,
+            "latency_ms": result.latency_ms,
+            "cost": float(result.cost),
+            "success": bool(result.success),
+            "error": result.error,
+            "status": result.status,
+            "correlation_id": result.correlation_id,
+            "usage": result.usage,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def obter_execution_result_por_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém o resultado de execução associado a um decision_record_id."""
+        result = (
+            self.session.query(db.ExecutionResult)
+            .filter(db.ExecutionResult.decision_record_id == decision_record_id)
+            .first()
+        )
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_id": str(result.execution_id),
+            "decision_record_id": str(result.decision_record_id),
+            "requested_model": result.requested_model,
+            "actual_model": result.actual_model,
+            "provider": result.provider,
+            "output": result.output,
+            "latency_ms": result.latency_ms,
+            "cost": float(result.cost),
+            "success": bool(result.success),
+            "error": result.error,
+            "status": result.status,
+            "correlation_id": result.correlation_id,
+            "usage": result.usage,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def obter_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém um registro de decisão por id."""
+        from olympus.db import models as db
+        registro = self.session.get(db.DecisaoRegistro, decision_record_id)
+        if registro is None:
+            return None
+        return {
+            "id": str(registro.id),
+            "project_id": str(registro.project_id) if registro.project_id else None,
+            "task_id": registro.task_id,
+            "execution_id": str(registro.execution_id) if registro.execution_id else None,
+            "input_type": registro.input_type,
+            "task_description": registro.task_description,
+            "selected_provider": registro.selected_provider,
+            "selected_model": registro.selected_model,
+            "candidate_models": registro.candidate_models,
+            "policy_applied": registro.policy_applied,
+            "decision_reason": registro.decision_reason,
+            "confidence_score": float(registro.confidence_score),
+            "estimated_cost": float(registro.estimated_cost),
+            "estimated_latency_ms": registro.estimated_latency_ms,
+            "status": registro.status.value if registro.status else None,
+            "created_at": registro.created_at.isoformat() if registro.created_at else None,
+            "updated_at": registro.updated_at.isoformat() if registro.updated_at else None,
+        }
+
+    def listar_execution_results(
+        self,
+        limit: int = 50,
+        execution_id: Optional[str] = None,
+        decision_record_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista resultados de execução com filtros opcionais."""
+        query = self.session.query(db.ExecutionResult)
+        if execution_id is not None:
+            query = query.filter(db.ExecutionResult.execution_id == execution_id)
+        if decision_record_id is not None:
+            query = query.filter(db.ExecutionResult.decision_record_id == decision_record_id)
+        results = query.order_by(db.ExecutionResult.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": str(r.id),
+                "execution_id": str(r.execution_id),
+                "decision_record_id": str(r.decision_record_id),
+                "requested_model": r.requested_model,
+                "actual_model": r.actual_model,
+                "provider": r.provider,
+                "output": r.output,
+                "latency_ms": r.latency_ms,
+                "cost": float(r.cost),
+                "success": bool(r.success),
+                "error": r.error,
+                "status": r.status,
+                "correlation_id": r.correlation_id,
+                "usage": r.usage,
+                "metadata": r.metadata_,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in results
+        ]
+
+    # ---- quality_evaluations (PATCH 005D) ----
+
+    def registrar_quality_evaluation(
+        self,
+        *,
+        execution_result_id: str,
+        quality_score: float,
+        passed: bool,
+        evaluator: str,
+        reason: str,
+        criteria: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste uma avaliação de qualidade e retorna seu id."""
+        from olympus.db import models as db
+        eval_obj = db.QualityEvaluation(
+            execution_result_id=execution_result_id,
+            quality_score=quality_score,
+            passed=1 if passed else 0,
+            evaluator=evaluator,
+            reason=reason,
+            criteria=criteria or {},
+            metadata_=metadata or {},
+        )
+        self.session.add(eval_obj)
+        self.session.flush()
+        return str(eval_obj.id)
+
+    def obter_quality_evaluation(self, evaluation_id: str) -> Optional[dict]:
+        """Obtém uma avaliação de qualidade por id."""
+        from olympus.db import models as db
+        result = self.session.get(db.QualityEvaluation, evaluation_id)
+        if result is None:
+            return None
+        return {
+            "id": str(result.id),
+            "execution_result_id": str(result.execution_result_id),
+            "quality_score": float(result.quality_score),
+            "passed": bool(result.passed),
+            "evaluator": result.evaluator,
+            "reason": result.reason,
+            "criteria": result.criteria,
+            "metadata": result.metadata_,
+            "created_at": result.created_at.isoformat(),
+        }
+
+    def listar_quality_evaluations(
+        self,
+        limit: int = 50,
+        execution_result_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista avaliações de qualidade com filtros opcionais."""
+        from olympus.db import models as db
+        query = self.session.query(db.QualityEvaluation)
+        if execution_result_id is not None:
+            query = query.filter(db.QualityEvaluation.execution_result_id == execution_result_id)
+        results = query.order_by(db.QualityEvaluation.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": str(r.id),
+                "execution_result_id": str(r.execution_result_id),
+                "quality_score": float(r.quality_score),
+                "passed": bool(r.passed),
+                "evaluator": r.evaluator,
+                "reason": r.reason,
+                "criteria": r.criteria,
+                "metadata": r.metadata_,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in results
         ]

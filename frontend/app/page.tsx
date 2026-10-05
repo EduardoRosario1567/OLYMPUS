@@ -10,7 +10,7 @@ export default function RootPage() {
 
   useEffect(() => {
     if (carregando) return;
-    router.replace(autenticado ? "/dashboard" : "/login");
+    router.replace(autenticado ? "/missao" : "/login");
   }, [carregando, autenticado, router]);
 
   return null;

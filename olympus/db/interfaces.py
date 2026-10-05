@@ -139,3 +139,75 @@ class RepositorioPersistencia(Protocol):
         """Lista logs mais recentes primeiro, com filtros opcionais e busca
         textual simples (LIKE) em message/event_type."""
         ...
+
+    # ---- execution_results (PATCH 004B) ----
+
+    def registrar_execution_result(
+        self,
+        *,
+        execution_id: str,
+        decision_record_id: str,
+        requested_model: str,
+        actual_model: str,
+        provider: str,
+        output: str,
+        latency_ms: int,
+        cost: float,
+        success: bool,
+        error: Optional[str] = None,
+        status: str = "success",
+        correlation_id: Optional[str] = None,
+        usage: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste um resultado de execução real e retorna seu id."""
+        ...
+
+    def obter_execution_result(self, result_id: str) -> Optional[dict]:
+        """Obtém um resultado de execução por id."""
+        ...
+
+    def obter_execution_result_por_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém o resultado de execução associado a um decision_record_id."""
+        ...
+
+    def obter_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém um registro de decisão por id."""
+        ...
+
+    def listar_execution_results(
+        self,
+        limit: int = 50,
+        execution_id: Optional[str] = None,
+        decision_record_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista resultados de execução com filtros opcionais."""
+        ...
+
+    # ---- quality_evaluations (PATCH 005D) ----
+
+    def registrar_quality_evaluation(
+        self,
+        *,
+        execution_result_id: str,
+        quality_score: float,
+        passed: bool,
+        evaluator: str,
+        reason: str,
+        criteria: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste uma avaliação de qualidade e retorna seu id."""
+        ...
+
+    def obter_quality_evaluation(self, evaluation_id: str) -> Optional[dict]:
+        """Obtém uma avaliação de qualidade por id."""
+        ...
+
+    def listar_quality_evaluations(
+        self,
+        limit: int = 50,
+        execution_result_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista avaliações de qualidade com filtros opcionais."""
+        ...

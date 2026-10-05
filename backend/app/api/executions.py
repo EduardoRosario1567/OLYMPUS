@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from olympus.services.executions_service import listar_execucoes, obter_execucao
@@ -10,8 +12,8 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 @router.get("", response_model=list[ExecucaoOut])
 def listar(
     limit: int = Query(default=50, ge=1, le=200),
-    project_id: str | None = Query(default=None),
-    status_filtro: str | None = Query(default=None, alias="status"),
+    project_id: Optional[str] = Query(default=None),
+    status_filtro: Optional[str] = Query(default=None, alias="status"),
     _usuario: str = Depends(usuario_autenticado),
     repo=Depends(get_repo),
 ) -> list[ExecucaoOut]:

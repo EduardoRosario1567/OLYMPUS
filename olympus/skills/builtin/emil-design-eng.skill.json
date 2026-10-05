@@ -1,0 +1,53 @@
+{
+  "id": "emil-design-eng",
+  "name": "Emil Design Engineering",
+  "version": "1.0.0",
+  "description": "Applies deliberate motion, interaction timing and interface polish without sacrificing usability.",
+  "triggers": [
+    "emil design",
+    "animation",
+    "animação",
+    "motion",
+    "microinteraction",
+    "microinteração",
+    "easing",
+    "transition",
+    "transição"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "frontend",
+    "accessibility",
+    "testing"
+  ],
+  "constraints": [
+    "Motion must explain state, hierarchy or causality; do not animate merely to decorate.",
+    "Respect reduced-motion preferences and never delay essential actions for animation.",
+    "Avoid layout-triggering animation when transform or opacity can express the same transition."
+  ],
+  "guidance": [
+    "Choose duration and easing from the interaction: entrances settle, exits leave quickly and direct manipulation follows the pointer.",
+    "Use motion to preserve spatial continuity and show where content came from or went.",
+    "Keep microinteractions short, interruptible and consistent across components.",
+    "Prefer transform and opacity, and verify the final semantic state after rapid repeated input.",
+    "Polish typography, spacing, borders and shadows together with motion rather than treating animation as a separate layer."
+  ],
+  "completion_checks": [
+    "Every animation has a functional reason and consistent timing.",
+    "The interface remains complete and understandable with reduced motion enabled.",
+    "Rapid or interrupted interactions end in the correct visual and semantic state.",
+    "Motion does not create layout shift, blocked input or avoidable performance work."
+  ],
+  "category": "design",
+  "status": "active",
+  "source_url": "https://github.com/emilkowalski/skills",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

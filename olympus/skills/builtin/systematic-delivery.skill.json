@@ -1,0 +1,31 @@
+{
+  "id": "systematic-delivery",
+  "name": "Systematic Delivery",
+  "version": "1.0.0",
+  "description": "Turns a software request into a verified sequence of design, plan, implementation, review and completion.",
+  "triggers": ["superpowers", "systematic delivery", "desenvolvimento sistemático", "red green refactor", "tdd", "plano de implementação"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["coding", "testing"],
+  "constraints": [
+    "Do not expand the requested scope while formalizing the workflow.",
+    "Evidence from the repository and executed checks takes precedence over confident model claims.",
+    "Never declare completion while a known failing acceptance check remains."
+  ],
+  "guidance": [
+    "Convert the requested outcome into observable acceptance checks before substantial implementation.",
+    "Inspect the existing behavior and run the narrowest useful baseline check before editing.",
+    "Implement in small coherent deltas and verify each risky boundary before proceeding.",
+    "Review the result against the request, architecture constraints and likely failure modes.",
+    "Finish only with evidence from the final artifact and rerun checks after repairs."
+  ],
+  "completion_checks": [
+    "Acceptance checks cover the original requested outcome.",
+    "The final implementation was tested after the last modification.",
+    "No known failure or scope omission is hidden by a partial success.",
+    "The handoff names the result, evidence and any genuinely unverified external dependency."
+  ],
+  "category": "engineering",
+  "status": "active",
+  "source_url": "https://github.com/obra/superpowers",
+  "license": "MIT — methodology adapted into an Olympus-owned contract"
+}

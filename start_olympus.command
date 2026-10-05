@@ -1,0 +1,79 @@
+#!/bin/bash
+set -u
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+RUNTIME_DIR="$ROOT/.olympus/runtime"
+mkdir -p "$RUNTIME_DIR"
+EXPECTED_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/frontend/public/olympus-version.json" | head -n 1)"
+[ -n "$EXPECTED_VERSION" ] || { echo "ERRO: versão OLYMPUS não identificada."; exit 1; }
+export OLYMPUS_MODEL_TIMEOUT="${OLYMPUS_MODEL_TIMEOUT:-90}"
+
+listener_pids(){ lsof -nP -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null || true; }
+listener_cwd(){ lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1; }
+backend_body(){ curl -fsS --max-time 2 -H 'Cache-Control: no-cache' "http://127.0.0.1:8000/health?ts=$(date +%s)" 2>/dev/null || true; }
+frontend_body(){ curl -fsS --max-time 2 -H 'Cache-Control: no-cache' "http://127.0.0.1:3000/olympus-version.json?ts=$(date +%s)" 2>/dev/null || true; }
+backend_current(){ b="$(backend_body)"; printf '%s' "$b" | grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$EXPECTED_VERSION"'"'; }
+frontend_current(){ b="$(frontend_body)"; printf '%s' "$b" | grep -Eq '"product"[[:space:]]*:[[:space:]]*"olympus"' && printf '%s' "$b" | grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$EXPECTED_VERSION"'"'; }
+wait_current(){ which="$1"; seconds="$2"; for _ in $(seq 1 "$seconds"); do if "$which"; then return 0; fi; sleep 1; done; return 1; }
+
+safe_stop_port(){
+  port="$1"; expected_cwd="$2"; label="$3"
+  pids="$(listener_pids "$port")"
+  [ -n "$pids" ] || return 0
+  for pid in $pids; do
+    cwd="$(listener_cwd "$pid")"
+    [ "$cwd" = "$expected_cwd" ] || {
+      echo "ERRO: porta $port pertence a outro processo; $label não será encerrado."
+      echo "PID=$pid CWD=$cwd"
+      return 1
+    }
+  done
+  for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+  for _ in $(seq 1 12); do [ -z "$(listener_pids "$port")" ] && return 0; sleep 1; done
+  for pid in $pids; do
+    # A listener may have restarted or a PID may have been reused during TERM.
+    remaining="$(listener_pids "$port" | tr '\n' ' ')"
+    case " $remaining " in *" $pid "*) ;; *) continue ;; esac
+    cwd="$(listener_cwd "$pid")"
+    [ "$cwd" = "$expected_cwd" ] || {
+      echo "ERRO: o processo da porta $port mudou de identidade; não será encerrado."
+      return 1
+    }
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 5); do [ -z "$(listener_pids "$port")" ] && return 0; sleep 1; done
+  echo "ERRO: não foi possível liberar a porta $port."
+  return 1
+}
+
+echo "Iniciando OLYMPUS $EXPECTED_VERSION..."
+for t in curl python3 node npm lsof; do command -v "$t" >/dev/null 2>&1 || { echo "ERRO: componente ausente: $t"; exit 1; }; done
+
+if ! curl -sS --max-time 2 http://127.0.0.1:20128/v1/models >/dev/null 2>&1; then
+  if command -v omniroute >/dev/null 2>&1; then nohup omniroute serve >"$RUNTIME_DIR/omniroute.log" 2>&1 & echo $! >"$RUNTIME_DIR/omniroute.pid"; fi
+fi
+
+[ -x "$ROOT/.venv/bin/python" ] || python3 -m venv "$ROOT/.venv" || exit 1
+if [ ! -f "$ROOT/backend/.env" ]; then "$ROOT/.venv/bin/python" "$ROOT/scripts/first_run_setup.py" --template "$ROOT/backend/.env.example" --output "$ROOT/backend/.env" || exit 1; fi
+if ! "$ROOT/.venv/bin/python" -c 'import fastapi,jwt,uvicorn' >/dev/null 2>&1; then "$ROOT/.venv/bin/python" -m pip install -r "$ROOT/backend/requirements.txt" || exit 1; fi
+chmod 600 "$ROOT/backend/.env"
+
+# Reinicie sempre a instância da mesma versão iniciada com variáveis transitórias.
+# Explicit start = clean backend process. Known transient diagnostic overrides are removed.
+safe_stop_port 8000 "$ROOT" "backend OLYMPUS" || exit 1
+(cd "$ROOT" && env -u OLYMPUS_OMNIROUTE_URL PYTHONPATH="$ROOT" nohup "$ROOT/.venv/bin/python" -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 >"$RUNTIME_DIR/backend.log" 2>&1 & echo $! >"$RUNTIME_DIR/backend.launch.pid")
+if ! wait_current backend_current 30; then echo "ERRO: backend $EXPECTED_VERSION não iniciou. Consulte .olympus/runtime/backend.log"; exit 1; fi
+bp="$(listener_pids 8000 | head -1)"; [ -n "$bp" ] && echo "$bp" >"$RUNTIME_DIR/backend.pid"
+
+if [ ! -x "$ROOT/frontend/node_modules/.bin/next" ]; then (cd "$ROOT/frontend" && npm install) || exit 1; fi
+
+# 3.0.6: nunca reutilize um Next/Turbopack antigo em um start explícito.
+# A versão anterior podia responder HTTP 200 e ainda manter chunks/hidratação obsoletos.
+safe_stop_port 3000 "$ROOT/frontend" "frontend OLYMPUS" || exit 1
+rm -rf "$ROOT/frontend/.next"
+(cd "$ROOT/frontend" && NEXT_TELEMETRY_DISABLED=1 nohup npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNTIME_DIR/frontend.log" 2>&1 & echo $! >"$RUNTIME_DIR/frontend.launch.pid")
+if ! wait_current frontend_current 90; then echo "ERRO: frontend $EXPECTED_VERSION não iniciou. Consulte .olympus/runtime/frontend.log"; exit 1; fi
+fp="$(listener_pids 3000 | head -1)"; [ -n "$fp" ] && echo "$fp" >"$RUNTIME_DIR/frontend.pid"
+
+echo "OLYMPUS $EXPECTED_VERSION pronto."
+command -v open >/dev/null 2>&1 && open http://localhost:3000 >/dev/null 2>&1 || true
+exit 0

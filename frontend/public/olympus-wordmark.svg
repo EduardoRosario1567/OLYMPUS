@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 128" role="img" aria-labelledby="title">
+  <title id="title">OLYMPUS</title>
+  <image href="olympus-mark.png" x="0" y="0" width="128" height="128" preserveAspectRatio="xMidYMid meet"/>
+  <g fill="#fff" transform="translate(150 35) skewX(-10)">
+    <text x="0" y="51" font-family="Arial Black, Helvetica Neue, sans-serif" font-size="66" font-weight="900" font-style="italic" letter-spacing="2">OLYMPUS</text>
+    <path d="M6 66h405l-16 7H0l6-7Z" opacity=".92"/>
+  </g>
+</svg>

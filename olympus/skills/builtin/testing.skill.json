@@ -1,0 +1,33 @@
+{
+  "id": "testing",
+  "name": "Test Engineering",
+  "version": "2.0.0",
+  "description": "Test Engineering",
+  "triggers": [
+    "test",
+    "tests",
+    "pytest",
+    "unittest",
+    "coverage",
+    "teste",
+    "testes"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [],
+  "guidance": [
+    "Verify the delivered artifact against the original request, not only for syntax.",
+    "Treat failed quality checks as repair instructions and rerun verification before finish."
+  ],
+  "completion_checks": [
+    "All deterministic verification checks pass.",
+    "No known error or unmet requirement remains at finish."
+  ]
+}

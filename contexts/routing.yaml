@@ -1,0 +1,18 @@
+name: routing
+purpose: "Routing abstraction layer — interfaces and OmniRoute adapter"
+required:
+  - olympus/routing/interfaces.py
+  - olympus/routing/omniroute_adapter.py
+tests:
+  - tests/test_routing_contract.py
+  - tests/test_omniroute_adapter.py
+dependencies:
+  - olympus/models.py
+  - olympus/db/interfaces.py
+optional:
+  - olympus/routing/__init__.py
+forbidden:
+  - olympus/decision_engine.py
+  - olympus/judge/**
+  - olympus/services/**
+  - backend/**

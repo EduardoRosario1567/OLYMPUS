@@ -1,0 +1,20 @@
+{
+  "id": "product-experience",
+  "name": "Product Experience",
+  "version": "1.0.0",
+  "description": "Turns a request into a complete, useful and coherent user experience.",
+  "triggers": ["landing page", "interface", "experiência", "experience", "produto", "aplicativo", "website", "profissional"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["testing"],
+  "guidance": [
+    "Translate the objective into a clear information hierarchy and an intentional user journey.",
+    "Write specific, credible interface copy; never use Welcome, Lorem ipsum, TODO or generic filler.",
+    "Provide a clear value proposition, meaningful content, trust cues and calls to action appropriate to the request.",
+    "Keep the experience focused: progressive disclosure, clear labels and no technical clutter for end users."
+  ],
+  "completion_checks": [
+    "The result solves the stated user goal and contains all requested sections.",
+    "Content hierarchy, navigation and calls to action are understandable without explanation.",
+    "No placeholder, unfinished section or decorative-only control remains."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "documentation",
+  "name": "Documentation",
+  "version": "1.0.0",
+  "description": "Documentation",
+  "triggers": [
+    "documentation",
+    "docs",
+    "documentacao",
+    "documentação",
+    "readme",
+    "manual",
+    "guide"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": []
+}

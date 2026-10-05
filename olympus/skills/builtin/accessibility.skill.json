@@ -1,0 +1,19 @@
+{
+  "id": "accessibility",
+  "name": "Accessible Interface",
+  "version": "1.0.0",
+  "description": "Builds inclusive semantic interfaces with keyboard and assistive-technology support.",
+  "triggers": ["accessibility", "acessibilidade", "a11y", "interface", "frontend", "landing page"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": [],
+  "guidance": [
+    "Use semantic landmarks, a logical heading hierarchy, descriptive labels and meaningful alternative text.",
+    "Preserve keyboard access, visible focus and sufficient contrast; respect reduced-motion preferences.",
+    "Do not use clickable decorative elements in place of real links or buttons."
+  ],
+  "completion_checks": [
+    "The document declares language and title and uses semantic landmarks.",
+    "Interactive controls have understandable accessible names.",
+    "Images have meaningful alt text or are explicitly decorative."
+  ]
+}

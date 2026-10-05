@@ -17,7 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!carregando && autenticado) {
-      router.replace("/dashboard");
+      router.replace("/missao");
     }
   }, [carregando, autenticado, router]);
 
@@ -31,11 +31,12 @@ export default function LoginPage() {
   if (carregando || autenticado) return null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
+    <main className="flex min-h-screen items-center justify-center bg-[#101010] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Olympus</h1>
-          <p className="mt-1 text-sm text-zinc-500">Centro de comando de orquestração de IAs</p>
+          <span role="img" aria-label="Símbolo de Zeus do Olympus" className="mx-auto block h-20 w-20 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url('/olympus-mark.png?v=2.6.2')" }} />
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-50">Entrar no Olympus</h1>
+          <p className="mt-2 text-sm text-zinc-500">Continue de onde parou.</p>
         </div>
 
         <Card>
@@ -84,9 +85,6 @@ export default function LoginPage() {
               {enviando ? "Entrando..." : "Entrar"}
             </Button>
 
-            <a href="#" className="text-center text-xs text-zinc-500 hover:text-zinc-300">
-              Esqueceu a senha?
-            </a>
           </form>
         </Card>
       </div>

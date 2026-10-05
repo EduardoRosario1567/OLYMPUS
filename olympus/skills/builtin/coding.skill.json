@@ -1,0 +1,26 @@
+{
+  "id": "coding",
+  "name": "Software Coding",
+  "version": "1.0.0",
+  "description": "Software Coding",
+  "triggers": [
+    "code",
+    "coding",
+    "program",
+    "python",
+    "bug",
+    "refactor",
+    "implementar",
+    "implement"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": []
+}

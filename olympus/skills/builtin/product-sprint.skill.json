@@ -1,0 +1,31 @@
+{
+  "id": "product-sprint",
+  "name": "Product Sprint",
+  "version": "1.0.0",
+  "description": "Coordinates product, engineering, design, quality and release viewpoints in one bounded delivery sprint.",
+  "triggers": ["gstack", "product sprint", "sprint de produto", "ceo review", "engineering review", "design review", "entrega ponta a ponta"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["product-experience", "coding", "visual-design", "testing", "security"],
+  "constraints": [
+    "Use the smallest set of specialist viewpoints that materially changes the result.",
+    "Do not simulate independent review by repeating the same unsupported conclusion.",
+    "Do not publish or mutate external systems without the authority required for that action."
+  ],
+  "guidance": [
+    "Challenge the product outcome and narrow it to the smallest complete user value.",
+    "Lock architecture boundaries, acceptance checks and failure behavior before large changes.",
+    "Review the implemented experience for usefulness, visual coherence, maintainability and security.",
+    "Exercise the real user path with deterministic checks before presenting the work as shippable.",
+    "Preserve artifacts between phases so later work continues from verified state."
+  ],
+  "completion_checks": [
+    "Product, engineering, design and quality decisions agree on the same scoped outcome.",
+    "The main user journey works from entry to final result.",
+    "Release evidence was produced from the final state rather than an earlier build.",
+    "Open risks and external prerequisites are explicit."
+  ],
+  "category": "product",
+  "status": "active",
+  "source_url": "https://github.com/garrytan/gstack",
+  "license": "MIT — methodology adapted into an Olympus-owned contract"
+}

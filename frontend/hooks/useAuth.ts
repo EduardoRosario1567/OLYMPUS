@@ -27,7 +27,7 @@ export function useAuth() {
         const { access_token } = await api.login({ email, senha, lembrar });
         localStorage.setItem("olympus_token", access_token);
         setAutenticado(true);
-        router.push("/dashboard");
+        router.push("/missao");
       } catch (e) {
         setErro(e instanceof ApiError ? e.message : "Erro inesperado ao entrar.");
       }

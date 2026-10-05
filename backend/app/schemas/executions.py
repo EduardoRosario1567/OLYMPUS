@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -10,9 +12,9 @@ class ExecucaoOut(BaseModel):
     success_count: int
     fallback_count: int
     created_at: str
-    modelo_principal: str | None = None
-    confianca_media: float | None = None
-    fallback_usado: bool | None = None
+    modelo_principal: Optional[str] = None
+    confianca_media: Optional[float] = None
+    fallback_usado: Optional[bool] = None
 
 
 class ExecucaoDetalheOut(BaseModel):
@@ -24,4 +26,4 @@ class ExecucaoDetalheOut(BaseModel):
     success_count: int
     fallback_count: int
     created_at: str
-    result_summary: str | None
+    result_summary: Optional[str]

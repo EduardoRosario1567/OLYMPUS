@@ -1,0 +1,53 @@
+{
+  "id": "offer-engineering",
+  "name": "Offer Engineering",
+  "version": "1.0.0",
+  "description": "Transforms a product or service into a clear, credible and commercially coherent offer.",
+  "triggers": [
+    "offer engineering",
+    "oferta",
+    "proposta comercial",
+    "pacote comercial",
+    "precificação",
+    "pricing",
+    "bônus",
+    "garantia",
+    "objeções",
+    "conversão"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "product-experience",
+    "testing"
+  ],
+  "constraints": [
+    "Do not invent testimonials, evidence, guarantees, scarcity, prices or business results.",
+    "Label assumptions and demonstration content explicitly and preserve applicable legal and platform constraints.",
+    "Prefer a credible specific promise over exaggerated or absolute claims."
+  ],
+  "guidance": [
+    "Identify the audience, urgent job, present pain, desired outcome, buying objections and decision context before shaping the offer.",
+    "Build the offer from promise, differentiated mechanism, concrete deliverables, proof, risk reduction, terms and one clear next action.",
+    "Separate the core outcome from features, bonuses and optional tiers so value remains understandable.",
+    "Make scope, eligibility, timing, price or price placeholder, exclusions and fulfillment responsibilities explicit.",
+    "Use ethical urgency and factual proof; never manufacture scarcity or social validation.",
+    "Write the offer so a qualified prospect can explain what they receive, why it matters and what happens next."
+  ],
+  "completion_checks": [
+    "The target audience and desired outcome are specific and internally consistent.",
+    "The promise, mechanism, deliverables, proof and terms are clear without unsupported claims.",
+    "Important objections and risks are addressed without deceptive persuasion.",
+    "The offer has one understandable call to action and a concrete next step.",
+    "No invented testimonial, false scarcity or unverified performance result remains."
+  ],
+  "category": "strategy",
+  "status": "active"
+}

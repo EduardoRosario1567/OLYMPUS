@@ -1,0 +1,2 @@
+# Optional dependency: install only when connecting an external MCP client.
+mcp>=1.0,<2

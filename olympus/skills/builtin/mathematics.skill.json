@@ -1,0 +1,8 @@
+{
+  "id":"mathematics","name":"Mathematical Reasoning","version":"2.8.0","description":"Mathematical and numerical problem solving with deterministic recomputation.",
+  "triggers":["calcule","calcular","cálculo","calculo","matemática","matematica","juros","percentual","porcentagem"],
+  "allowed_actions":["inspect_result","finish"],
+  "depends_on":[],
+  "guidance":["State assumptions and units explicitly.","Recompute the final numerical result independently before finish."],
+  "completion_checks":["The final numeric result is internally consistent.","Units and assumptions are preserved."]
+}

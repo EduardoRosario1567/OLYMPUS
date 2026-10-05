@@ -15,6 +15,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
 
@@ -27,6 +31,31 @@ jobs:
         run: |
           export PYTHONPATH=.
           pytest tests/ -v
+
+      - name: Verificar sintaxe Python
+        run: python -m compileall -q backend olympus scripts
+
+      - name: Verificar dependências Python conhecidas
+        run: pip install pip-audit && pip-audit -r backend/requirements.txt --strict
+
+      - name: Instalar dependências e navegador real
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+
+      - name: Gate de release — missão, failover, checkpoint e entrega
+        run: |
+          export PYTHONPATH=.
+          python3 scripts/release_gate.py
+
+      - name: Publicar relatório do gate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: olympus-release-gate-report
+          path: .olympus/qa/release-gate.json
+          if-no-files-found: ignore
 
       - name: Subir backend em background
         run: |
@@ -108,9 +137,7 @@ jobs:
 
       - name: Instalar dependências
         working-directory: frontend
-        # sem package-lock.json commitado ainda (gerado na primeira instalação real) — `npm ci`
-        # exigiria o lockfile presente; usamos install até o lockfile existir no repo.
-        run: npm install
+        run: npm ci
 
       - name: Preparar .env.local
         working-directory: frontend
@@ -119,6 +146,10 @@ jobs:
       - name: Build de produção
         working-directory: frontend
         run: npm run build
+
+      - name: Auditar dependências JavaScript
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
       - name: Subir em modo produção
         working-directory: frontend

@@ -1,0 +1,27 @@
+{
+  "id": "answer-first",
+  "name": "Answer First",
+  "version": "1.0.0",
+  "description": "Presents the concrete outcome before supporting detail, while preserving evidence and limitations.",
+  "triggers": ["answer first", "resposta primeiro", "comece pela resposta", "seja direto", "sem enrolação", "direto ao ponto"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": [],
+  "constraints": [
+    "Conciseness must not hide uncertainty, risk, cost, failure or an unmet requirement.",
+    "Do not claim success before verification.",
+    "Keep necessary commands and user actions complete and executable."
+  ],
+  "guidance": [
+    "Lead with the result, decision or blocker in one clear sentence.",
+    "Follow with only the evidence, limitation and next action needed by the user.",
+    "Use labels or short lists when they materially improve scanning.",
+    "Remove process narration that does not help the user verify or act."
+  ],
+  "completion_checks": [
+    "The first sentence communicates the actual outcome.",
+    "Claims are supported by evidence or explicitly identified as unverified.",
+    "The user can execute the next action without reconstructing missing steps."
+  ],
+  "category": "communication",
+  "status": "active"
+}

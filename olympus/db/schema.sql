@@ -93,6 +93,65 @@ ALTER TABLE decisao_registros
     ADD CONSTRAINT fk_decisao_registros_projeto
     FOREIGN KEY (project_id) REFERENCES projetos(id);
 
+-- ==== TABELA: execution_results =============================================
+-- PATCH 004B: resultado real de execução, separado da decisão
+-- PATCH 004C: execution_result_status ENUM
+
+CREATE TYPE execution_result_status AS ENUM (
+    'success',
+    'timeout',
+    'provider_error',
+    'billing_error',
+    'unavailable',
+    'rate_limited',
+    'authentication_error',
+    'malformed_response',
+    'unknown_error'
+);
+
+CREATE TABLE execution_results (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id            UUID NOT NULL REFERENCES execucoes(id),
+    decision_record_id      UUID NOT NULL REFERENCES decisao_registros(id),
+    requested_model         VARCHAR(120) NOT NULL,
+    actual_model            VARCHAR(120) NOT NULL,
+    provider                VARCHAR(80) NOT NULL,
+    output                  TEXT NOT NULL,
+    latency_ms              INTEGER NOT NULL DEFAULT 0,
+    cost                    NUMERIC(12,6) NOT NULL DEFAULT 0,
+    success                 BOOLEAN NOT NULL DEFAULT TRUE,
+    error                   TEXT NULL,
+    status                  execution_result_status NOT NULL DEFAULT 'success',
+    correlation_id          VARCHAR(80) NULL,
+    usage                   JSONB NULL DEFAULT '{}',
+    metadata                JSONB NULL DEFAULT '{}',
+    created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_execution_results_execution_id    ON execution_results(execution_id);
+CREATE INDEX idx_execution_results_decision_record_id ON execution_results(decision_record_id);
+CREATE INDEX idx_execution_results_created_at      ON execution_results(created_at);
+
+
+-- ==== TABELA: quality_evaluations ===========================================
+-- PATCH 005D: avaliação de qualidade, separada da decisão e do resultado de execução
+
+CREATE TABLE quality_evaluations (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_result_id     UUID NOT NULL REFERENCES execution_results(id),
+    quality_score           NUMERIC(5,2) NOT NULL CHECK (quality_score >= 0 AND quality_score <= 1),
+    passed                  BOOLEAN NOT NULL DEFAULT FALSE,
+    evaluator               VARCHAR(80) NOT NULL,
+    reason                  TEXT NOT NULL,
+    criteria                JSONB NOT NULL DEFAULT '{}',
+    metadata                JSONB NOT NULL DEFAULT '{}',
+    created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_quality_evaluations_execution_result_id ON quality_evaluations(execution_result_id);
+CREATE INDEX idx_quality_evaluations_created_at ON quality_evaluations(created_at);
+
+
 -- ==== TABELA: logs ===========================================================
 
 CREATE TABLE logs (

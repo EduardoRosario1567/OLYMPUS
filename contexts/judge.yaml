@@ -1,0 +1,21 @@
+name: judge
+purpose: "Quality evaluation layer — interfaces, policies, RuleBasedJudge"
+required:
+  - olympus/judge/interfaces.py
+  - olympus/judge/policies.py
+  - olympus/judge/rule_based.py
+tests:
+  - tests/test_judge_contract.py
+  - tests/test_rule_based_judge.py
+  - tests/test_evaluation_policies.py
+dependencies:
+  - olympus/models.py
+  - olympus/db/interfaces.py
+optional:
+  - olympus/judge/__init__.py
+  - olympus/intelligence_loop.py
+forbidden:
+  - olympus/decision_engine.py
+  - olympus/routing/omniroute_adapter.py
+  - olympus/services/**
+  - backend/**

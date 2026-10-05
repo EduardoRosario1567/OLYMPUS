@@ -1,0 +1,8 @@
+{
+  "id":"file-operations","name":"File Operations","version":"2.8.0","description":"Deterministic file creation and editing with minimal scope.",
+  "triggers":["arquivo","file","txt","texto"],
+  "allowed_actions":["read_file","search_code","create_file","patch_file","inspect_result","finish"],
+  "depends_on":[],
+  "guidance":["Change only the requested files.","When exact content is specified, preserve it exactly and verify the disk content before finish."],
+  "completion_checks":["Every requested file exists.","Exact-content requirements match the bytes/text on disk."]
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "olympus.trust-report.v1",
+  "status": "VERIFIED",
+  "critical_failures": 0,
+  "checks": [
+    {
+      "name": "security_regression",
+      "pass": true,
+      "seconds": 2.342,
+      "output": "----------------------------------------------------------------------\nRan 5 tests in 0.006s\n\nOK\n"
+    },
+    {
+      "name": "full_regression",
+      "pass": true,
+      "seconds": 27.909,
+      "output": "----------------------------------------------------------------------\nRan 514 tests in 23.754s\n\nOK (skipped=4)\n"
+    }
+  ]
+}

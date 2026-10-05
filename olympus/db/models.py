@@ -8,7 +8,7 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Enum as SAEnum
+    Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Enum as SAEnum, CheckConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
@@ -22,6 +22,24 @@ class ExecutionStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     PARTIAL = "partial"
+
+
+class ExecutionResultStatus(str, enum.Enum):
+    """Status técnico do resultado de execução (PATCH 004C).
+
+    Distingue falha técnica de execução de qualidade da resposta.
+    "success" significa apenas: execução técnica recebeu e parseou resposta válida.
+    NÃO significa resposta de boa qualidade.
+    """
+    SUCCESS = "success"
+    TIMEOUT = "timeout"
+    PROVIDER_ERROR = "provider_error"
+    BILLING_ERROR = "billing_error"
+    UNAVAILABLE = "unavailable"
+    RATE_LIMITED = "rate_limited"
+    AUTHENTICATION_ERROR = "authentication_error"
+    MALFORMED_RESPONSE = "malformed_response"
+    UNKNOWN_ERROR = "unknown_error"
 
 
 class DecisionStatus(str, enum.Enum):
@@ -121,3 +139,48 @@ class Log(Base):
 
     execucao = relationship("Execucao", back_populates="logs")
     decisao = relationship("DecisaoRegistro", back_populates="logs")
+
+
+class ExecutionResult(Base):
+    __tablename__ = "execution_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_id = Column(UUID(as_uuid=True), ForeignKey("execucoes.id"), nullable=False)
+    decision_record_id = Column(UUID(as_uuid=True), ForeignKey("decisao_registros.id"), nullable=False)
+    requested_model = Column(String(120), nullable=False)
+    actual_model = Column(String(120), nullable=False)
+    provider = Column(String(80), nullable=False)
+    output = Column(Text, nullable=False)
+    latency_ms = Column(Integer, nullable=False, default=0)
+    cost = Column(Numeric(12, 6), nullable=False, default=0)
+    success = Column(Integer, nullable=False, default=0)  # 0/1 for boolean
+    error = Column(Text, nullable=True)
+    status = Column(SAEnum(ExecutionResultStatus, name="execution_result_status"), nullable=False, default=ExecutionResultStatus.SUCCESS)
+    correlation_id = Column(String(80), nullable=True)
+    usage = Column(JSONB, nullable=True, default=dict)
+    metadata_ = Column("metadata", JSONB, nullable=True, default=dict)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class QualityEvaluation(Base):
+    """Avaliação de qualidade de um resultado de execução — PATCH 005D.
+
+    Entidade separada de DecisionRecord e ExecutionResult.
+    Persiste exatamente o quality_score do JudgeResult.
+    """
+    __tablename__ = "quality_evaluations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_result_id = Column(UUID(as_uuid=True), ForeignKey("execution_results.id"), nullable=False)
+    quality_score = Column(Numeric(5, 2), nullable=False)  # 0.00 a 1.00
+    passed = Column(Integer, nullable=False, default=0)  # 0/1 for boolean
+    evaluator = Column(String(80), nullable=False)
+    reason = Column(Text, nullable=False)
+    criteria = Column(JSONB, nullable=False, default=dict)
+    metadata_ = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    # Constraint: quality_score between 0 and 1
+    __table_args__ = (
+        CheckConstraint('quality_score >= 0 AND quality_score <= 1', name='ck_quality_score_range'),
+    )

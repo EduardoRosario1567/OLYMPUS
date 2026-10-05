@@ -1,0 +1,8 @@
+{
+  "id":"app-architecture","name":"Application Architecture","version":"2.8.0","description":"Application structure, boundaries and integration design.",
+  "triggers":["aplicativo","application","app","arquitetura"],
+  "allowed_actions":["read_file","search_code","create_file","patch_file","run_test","inspect_result","finish"],
+  "depends_on":["testing"],
+  "guidance":["Respect existing module boundaries and data flow.","Prefer the smallest coherent architecture that satisfies the mission."],
+  "completion_checks":["The application entry path is runnable.","Changed modules remain internally consistent."]
+}

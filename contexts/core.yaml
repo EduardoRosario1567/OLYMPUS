@@ -1,0 +1,26 @@
+name: core
+purpose: "OLYMPUS decision/intelligence layer — classifier, registry, decision engine, pipeline, models"
+required:
+  - olympus/models.py
+  - olympus/classifier.py
+  - olympus/registry.py
+  - olympus/decision_engine.py
+  - olympus/pipeline.py
+  - olympus/intelligence_loop.py
+tests:
+  - tests/test_core.py
+  - tests/test_pipeline_routing.py
+  - tests/test_intelligence_loop.py
+dependencies:
+  - olympus/db/interfaces.py
+  - olympus/routing/interfaces.py
+  - olympus/judge/interfaces.py
+optional:
+  - olympus/closed_loop.py
+  - olympus/demo.py
+  - olympus/demo_persistente.py
+forbidden:
+  - olympus/routing/omniroute_adapter.py
+  - olympus/services/**
+  - backend/**
+  - frontend/**

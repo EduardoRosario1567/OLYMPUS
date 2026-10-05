@@ -1,0 +1,28 @@
+{
+  "id": "backend",
+  "name": "Backend Engineering",
+  "version": "1.0.0",
+  "description": "Backend Engineering",
+  "triggers": [
+    "backend",
+    "api",
+    "endpoint",
+    "worker",
+    "server",
+    "database",
+    "persistencia",
+    "persistência"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "testing"
+  ]
+}

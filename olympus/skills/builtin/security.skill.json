@@ -1,0 +1,25 @@
+{
+  "id": "security",
+  "name": "Security Review",
+  "version": "1.0.0",
+  "description": "Security Review",
+  "triggers": [
+    "security",
+    "seguranca",
+    "segurança",
+    "auth",
+    "authentication",
+    "authorization",
+    "tenant",
+    "vulnerability",
+    "secret"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": []
+}

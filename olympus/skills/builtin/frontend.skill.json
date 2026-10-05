@@ -1,0 +1,61 @@
+{
+  "id": "frontend",
+  "name": "Frontend Engineering",
+  "version": "2.1.0",
+  "description": "Frontend Engineering",
+  "triggers": [
+    "frontend",
+    "ui",
+    "ux",
+    "interface",
+    "web",
+    "react",
+    "next",
+    "mobile",
+    "tela",
+    "layout",
+    "landing page"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "research_sources",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "testing",
+    "product-experience",
+    "visual-design",
+    "accessibility",
+    "research"
+  ],
+  "guidance": [
+    "Before implementation create docs/delivery-concept.md: Visual thesis (brand, audience, mood, typography/color/spacing); Content plan (one job per section and a primary CTA); Interaction plan (real control behavior); Evidence (confirmed facts, unknown facts, assets, source/license and review limits).",
+    "Prioritize user assets and confirmed business facts. Where imagery or context is missing, call research_sources with target images/context and payload query plus language. Choose intentional imagery; never invent image URLs, addresses, prices, founding dates, testimonials or business contacts.",
+    "Build a distinctive brand composition with purposeful type, restrained spacing and a dominant relevant visual when imagery serves the mission. Avoid repeated generic card grids; preserve an existing design system when provided. Write concise specific copy in the user language.",
+    "Implement semantic responsive HTML, meaningful alt text, keyboard focus and every requested interaction. Do not put delivery-process commentary or internal review labels into the product UI.",
+    "Validate the actual deliverable, assets and primary controls. Structural checks and inspect_result do not prove visual quality. Without a real browser/vision tool, report desktop/mobile and visual review as pending in delivery notes; never claim professionally reviewed.",
+    "Refine hierarchy, image crop, contrast, mobile layout and copy after rendered-page review. Publish facts, sources/license credits and tested behavior separately from review still pending."
+  ],
+  "completion_checks": [
+    "Delivery concept exists with confirmed facts separated from unknowns and a coherent brand/content/interaction direction.",
+    "The requested page and controls exist; attached assets take priority and any external assets have a real retrieved source, author and applicable license/credits.",
+    "Delivery states what was actually tested and whether browser and visual reviews are pending; no model statement is presented as tool evidence."
+  ],
+  "reference_sources": [
+    {
+      "name": "OpenAI — Designing delightful frontends",
+      "url": "https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4",
+      "use": "Direction, content, relevant imagery and rendered review; original adaptation, not an imported skill."
+    },
+    {
+      "name": "Anthropic — frontend-design",
+      "url": "https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md",
+      "use": "Brand-specific typography/composition and critique; original adaptation, not an imported skill."
+    }
+  ]
+}

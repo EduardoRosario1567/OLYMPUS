@@ -1,0 +1,53 @@
+{
+  "id": "brandkit",
+  "name": "Brand Kit",
+  "version": "1.0.0",
+  "description": "Turns a concise brand brief into a coherent identity direction and reusable visual system.",
+  "triggers": [
+    "brandkit",
+    "brand kit",
+    "identidade visual",
+    "marca",
+    "branding",
+    "logo",
+    "moodboard",
+    "manual de marca"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "visual-design",
+    "accessibility",
+    "testing"
+  ],
+  "constraints": [
+    "Do not claim trademark availability or originality without a dedicated search.",
+    "Do not invent company history, audience research or brand attributes not supplied by the user.",
+    "Keep the system usable in monochrome, small sizes and accessible digital contexts."
+  ],
+  "guidance": [
+    "Translate purpose, audience, personality, positioning and constraints into a concise creative direction.",
+    "Define logo behavior, color roles, typography hierarchy, spacing, imagery, iconography and voice as one system.",
+    "Show primary, alternate, monochrome and minimum-size behavior when a logo is part of the request.",
+    "Build application examples that match the actual business instead of decorative mockups with no decision value.",
+    "Document misuse rules and accessibility considerations alongside the preferred direction."
+  ],
+  "completion_checks": [
+    "The identity direction is traceable to the brief and target audience.",
+    "Color and typography roles are named and reusable.",
+    "Logo or mark behavior includes practical variants and misuse boundaries when applicable.",
+    "Examples demonstrate consistent application across at least the requested touchpoints.",
+    "No unsupported trademark or originality claim remains."
+  ],
+  "category": "design",
+  "status": "active",
+  "source_url": "https://github.com/Leonxlnx/taste-skill",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

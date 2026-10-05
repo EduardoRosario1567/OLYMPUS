@@ -1,0 +1,20 @@
+name: persistence
+purpose: "Data persistence layer — interfaces, SQLite dev repo, Postgres/SQLAlchemy repo, ORM models, schema"
+required:
+  - olympus/db/interfaces.py
+  - olympus/db/sqlite_dev_repository.py
+  - olympus/db/repository.py
+  - olympus/db/models.py
+  - olympus/db/schema.sql
+tests:
+  - tests/test_persistence.py
+  - tests/test_quality_evaluation.py
+dependencies:
+  - olympus/models.py
+optional: []
+forbidden:
+  - olympus/decision_engine.py
+  - olympus/routing/omniroute_adapter.py
+  - olympus/judge/**
+  - olympus/services/**
+  - backend/**

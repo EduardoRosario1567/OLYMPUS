@@ -22,7 +22,68 @@ _PALAVRAS_CHAVE: dict[TaskType, list[str]] = {
 
 
 class TaskClassifier:
+    _SOFTWARE_BUILD_ACTIONS = (
+        "crie", "criar", "construa", "construir", "desenvolva", "desenvolver",
+        "gere", "gerar", "monte", "montar", "implemente", "implementar",
+        "create", "build", "develop", "generate", "implement",
+    )
+    _SOFTWARE_ARTIFACTS = (
+        "landing page", "interface web", "interface", "frontend", "front-end",
+        "página web", "pagina web", "website", "site", "aplicativo", "dashboard",
+        "componente", "tela", "endpoint", "api",
+    )
+    _AGENT_CODE_INTENT_RULES = (
+        "crie uma constante",
+        "criar uma constante",
+        "adicione uma função",
+        "adicionar uma função",
+        "crie uma função",
+        "implemente uma função",
+        "implemente um módulo",
+        "implementar um módulo",
+        "corrija este arquivo",
+        "corrigir este arquivo",
+        "modifique este arquivo",
+        "modificar este arquivo",
+        "create a constant",
+        "add a function",
+        "create a function",
+        "implement a module",
+        "implement a function",
+        "fix this file",
+        "modify this file",
+    )
+
+    @classmethod
+    def has_software_build_intent(cls, descricao: str) -> bool:
+        """Recognize builds before ambiguous terms such as 'trabalho manual'."""
+        text = str(descricao or "").lower()
+        has_action = any(
+            re.search(r"(?<!\w)%s(?!\w)" % re.escape(action), text)
+            for action in cls._SOFTWARE_BUILD_ACTIONS
+        )
+        has_artifact = any(
+            re.search(r"(?<!\w)%s(?!\w)" % re.escape(artifact), text)
+            for artifact in cls._SOFTWARE_ARTIFACTS
+        )
+        return has_action and has_artifact
+
+
     def classify(self, descricao: str) -> TaskType:
+
+        descricao_norm = descricao.lower().strip()
+
+        # A software deliverable wins over incidental documentation/review
+        # vocabulary contained inside its product brief.
+        if self.has_software_build_intent(descricao_norm):
+            return TaskType.CODIGO
+
+        if any(
+            rule in descricao_norm
+            for rule in self._AGENT_CODE_INTENT_RULES
+        ):
+            return TaskType.CODIGO
+
         texto = descricao.lower()
 
         for tipo, palavras in _PALAVRAS_CHAVE.items():

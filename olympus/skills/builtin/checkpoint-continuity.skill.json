@@ -1,0 +1,28 @@
+{
+  "id": "checkpoint-continuity",
+  "name": "Checkpoint Continuity",
+  "version": "1.0.0",
+  "description": "Makes retries and model failover continue from verified progress instead of restarting the mission.",
+  "triggers": ["save progress", "salvar progresso", "checkpoint", "retomar missão", "continuar de onde parou", "modelo falhou", "failover"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["testing"],
+  "constraints": [
+    "Never repeat a guarded mutation whose idempotency key is already complete.",
+    "Only verified work may be marked complete in the continuation state.",
+    "A provider failure must not erase project files, tests or prior decisions."
+  ],
+  "guidance": [
+    "Load the latest mission checkpoint before selecting the next action.",
+    "Carry files read, files modified, tests run, completed action keys and the last unresolved error.",
+    "On failover, tell the next model what is complete and request only the next delta.",
+    "Verify repository state before replaying an action whose completion is uncertain."
+  ],
+  "completion_checks": [
+    "Retry and failover preserve the same mission identity and original acceptance criteria.",
+    "Completed guarded mutations are not duplicated.",
+    "The next provider begins from the latest verified state.",
+    "Final evidence includes all work completed across providers."
+  ],
+  "category": "reliability",
+  "status": "active"
+}

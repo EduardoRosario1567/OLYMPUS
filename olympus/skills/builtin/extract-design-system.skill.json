@@ -1,0 +1,52 @@
+{
+  "id": "extract-design-system",
+  "name": "Extract Design System",
+  "version": "1.0.0",
+  "description": "Extracts a reusable starter token system from an authorized public visual reference.",
+  "triggers": [
+    "extract design system",
+    "extrair design system",
+    "extrair tokens",
+    "tokens.json",
+    "tokens.css",
+    "site de referência",
+    "copiar estilo",
+    "cores e fontes do site"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "visual-design",
+    "testing"
+  ],
+  "constraints": [
+    "Analyze only public or user-authorized references and never bypass access controls.",
+    "Extract reusable design facts, not copyrighted copy, protected assets or a pixel-identical clone.",
+    "Treat computed browser values as observations and normalize them before creating tokens."
+  ],
+  "guidance": [
+    "Inventory colors, typography, spacing, border radius, borders, shadows and recurring component states from the supplied reference.",
+    "Separate raw observations from normalized semantic tokens and record the source URL and capture context.",
+    "Consolidate near-duplicates into a small practical scale while preserving meaningful contrast and hierarchy.",
+    "Generate W3C-style JSON tokens and CSS custom properties when the target is a web project.",
+    "Summarize uncertainties and values that require visual confirmation before broad application."
+  ],
+  "completion_checks": [
+    "Raw observations and normalized tokens remain distinguishable.",
+    "Color, typography, spacing, radius and shadow categories are represented when observable.",
+    "Generated token files are syntactically valid and contain no copied private asset or page copy.",
+    "The source and extraction limitations are documented.",
+    "A sample component can consume the tokens without embedding reference-specific markup."
+  ],
+  "category": "design",
+  "status": "active",
+  "source_url": "https://github.com/arvindrk/extract-design-system",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

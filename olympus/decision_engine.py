@@ -9,6 +9,7 @@ Regras (conforme especificação):
 - sempre registrar o motivo da escolha
 """
 
+from typing import Optional
 from olympus.models import Tarefa, Modelo, DecisaoRegistro, TaskType
 from olympus.registry import ModelRegistry
 
@@ -91,12 +92,21 @@ class DecisionEngine:
         if tarefa.critica:
             # confiabilidade primeiro (modelo "premium")
             return sorted(candidatos, key=lambda m: (-m.confiabilidade, -m.prioridade, m.custo_estimado))
-        # tarefa simples/padrão: custo primeiro
-        return sorted(candidatos, key=lambda m: (m.custo_estimado, -m.confiabilidade))
+        # tarefa simples/padrão: custo first, then capability fit and reliability.
+        # This keeps FREE mode deterministic while avoiding a single-model monoculture.
+        return sorted(
+            candidatos,
+            key=lambda m: (
+                m.custo_estimado,
+                -self.registry.score_capacidade(m, tarefa.tipo),
+                -m.confiabilidade,
+                -m.prioridade,
+            ),
+        )
 
     def _escolher_com_fallback(
         self, ordenados: list[Modelo], tarefa: Tarefa
-    ) -> tuple[Modelo | None, bool, str]:
+    ) -> tuple[Optional[Modelo], bool, str]:
         for i, modelo in enumerate(ordenados):
             if modelo.confiabilidade >= self.confianca_minima:
                 if i == 0:
@@ -120,11 +130,11 @@ class DecisionEngine:
 
     def _aplicar_limite_custo(
         self,
-        escolhido: Modelo | None,
+        escolhido: Optional[Modelo],
         ordenados: list[Modelo],
         tarefa: Tarefa,
         motivo_atual: str,
-    ) -> tuple[Modelo | None, bool, str]:
+    ) -> tuple[Optional[Modelo], bool, str]:
         """
         Regra: custo acima do limite -> downgrade de modelo.
         Roda depois da seleção normal (política + fallback de confiança).

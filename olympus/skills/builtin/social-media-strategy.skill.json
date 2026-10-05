@@ -1,0 +1,31 @@
+{
+  "id": "social-media-strategy",
+  "name": "Social Media Strategy",
+  "version": "1.0.0",
+  "description": "Creates channel-specific social content from an audience, objective, evidence and publishing context.",
+  "triggers": ["social media", "redes sociais", "calendário editorial", "instagram", "linkedin", "reels", "carrossel", "conteúdo para whatsapp"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "inspect_result", "finish"],
+  "depends_on": ["documentation", "visual-design"],
+  "constraints": [
+    "Do not invent testimonials, metrics, urgency, partnerships or factual claims.",
+    "Respect the audience, brand voice, platform format and requested call to action.",
+    "Do not publish or contact people without explicit authority."
+  ],
+  "guidance": [
+    "Identify the objective, audience segment, platform, format, voice and measurable response before drafting.",
+    "Build one clear message around a useful hook, evidence, value and next action.",
+    "Adapt structure and length to the channel instead of reposting identical text everywhere.",
+    "Provide visual direction, accessibility text and production notes when the format needs them.",
+    "Remove generic AI phrasing and preserve concrete human language."
+  ],
+  "completion_checks": [
+    "The content fits the chosen audience, channel and format.",
+    "The hook, central value and call to action are coherent.",
+    "All factual claims are supplied, sourced or clearly marked as placeholders.",
+    "The final text sounds intentional rather than generic or duplicated across channels."
+  ],
+  "category": "marketing",
+  "status": "active",
+  "source_url": "https://github.com/social-media-skills/skills",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

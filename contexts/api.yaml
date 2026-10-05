@@ -1,0 +1,35 @@
+name: api
+purpose: "Backend API layer — FastAPI routes, schemas, deps, services integration"
+required:
+  - backend/app/main.py
+  - backend/app/core/deps.py
+  - backend/app/core/security.py
+  - backend/app/api/__init__.py
+  - backend/app/api/auth.py
+  - backend/app/api/projects.py
+  - backend/app/api/executions.py
+  - backend/app/api/logs.py
+  - backend/app/api/dashboard.py
+  - backend/app/schemas/__init__.py
+  - backend/app/schemas/projects.py
+  - backend/app/schemas/executions.py
+  - backend/app/schemas/logs.py
+  - backend/app/schemas/dashboard.py
+tests:
+  - tests/test_services.py
+dependencies:
+  - olympus/db/interfaces.py
+  - olympus/models.py
+  - olympus/services/dashboard_service.py
+  - olympus/services/executions_service.py
+  - olympus/services/logs_service.py
+  - olympus/services/projects_service.py
+optional:
+  - backend/app/core/seed.py
+  - backend/app/core/__init__.py
+  - backend/app/__init__.py
+forbidden:
+  - olympus/decision_engine.py
+  - olympus/routing/omniroute_adapter.py
+  - olympus/judge/**
+  - frontend/**

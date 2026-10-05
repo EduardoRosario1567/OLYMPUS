@@ -1,0 +1,50 @@
+{
+  "id": "web-design-guidelines",
+  "name": "Web Design Guidelines",
+  "version": "1.0.0",
+  "description": "Audits web interfaces against concrete accessibility, interaction, performance and UX rules.",
+  "triggers": [
+    "web design guidelines",
+    "auditar interface",
+    "auditoria de design",
+    "revisar interface",
+    "review ui",
+    "check accessibility",
+    "revisar ux",
+    "boas práticas web"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "accessibility",
+    "testing"
+  ],
+  "constraints": [
+    "Report only findings supported by inspected files or executed checks.",
+    "Preserve product behavior unless a change is required to correct a verified issue.",
+    "Prioritize blocking accessibility and interaction failures over cosmetic preferences."
+  ],
+  "guidance": [
+    "Audit semantic HTML, accessible names, keyboard behavior, focus, forms, error feedback, images and heading order.",
+    "Check animation preferences, touch behavior, navigation state, localization, theming and resilient text layout.",
+    "Check loading behavior, image dimensions, avoidable layout work and other performance risks visible in the implementation.",
+    "Return each problem with severity, file, precise location, user impact and a concrete repair.",
+    "Re-run the relevant checks after repairs and keep unresolved findings explicit."
+  ],
+  "completion_checks": [
+    "Every reported issue includes evidence, severity, location and remediation.",
+    "Critical keyboard, focus, form and accessible-name failures are resolved.",
+    "Responsive text, touch interaction and reduced-motion behavior are verified.",
+    "The final report separates corrected, accepted and unresolved findings."
+  ],
+  "category": "quality",
+  "status": "active",
+  "source_url": "https://github.com/vercel-labs/agent-skills",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

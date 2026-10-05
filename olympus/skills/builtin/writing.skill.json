@@ -1,0 +1,8 @@
+{
+  "id":"writing","name":"Writing","version":"2.8.0","description":"Writing, rewriting, summarization and translation tasks.",
+  "triggers":["escreva","redija","reescreva","resuma","traduza","write","rewrite","summarize","translate"],
+  "allowed_actions":["read_file","create_file","patch_file","inspect_result","finish"],
+  "depends_on":[],
+  "guidance":["Preserve the user's requested meaning, audience and format.","Do not introduce unsupported factual claims."],
+  "completion_checks":["The requested format and scope are satisfied."]
+}

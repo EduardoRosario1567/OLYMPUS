@@ -1,0 +1,44 @@
+OLYMPUS 2.6.2 — PILOTO PARA OUTROS MACS
+
+Este pacote é para teste piloto individual. Ele ainda não é um aplicativo
+assinado, notarizado ou um serviço público multiusuário.
+
+COMO ABRIR
+
+1. Descompacte o ZIP.
+2. Clique com o botão direito em INSTALAR-OLYMPUS.command e escolha Abrir.
+3. Confirme Abrir quando o macOS perguntar.
+4. Crie o e-mail e a senha local solicitados pelo instalador.
+5. Na primeira execução, aguarde a instalação das dependências.
+6. O navegador deve abrir automaticamente em http://localhost:3000.
+
+ACESSO LOCAL
+
+Cada pessoa cria suas próprias credenciais na primeira abertura. Não existe
+senha padrão no pacote. Guarde o e-mail e a senha criados: eles não são enviados
+ao distribuidor do Olympus.
+
+PRÉ-REQUISITOS
+
+- macOS com conexão à internet na primeira execução;
+- Python 3.9 ou superior;
+- Node.js 18 ou superior;
+- npm.
+
+OmniRoute é opcional para abrir o aplicativo, mas uma rota de IA precisa ser
+configurada para executar missões.
+
+PARA CONFIGURAR AS IAS
+
+Abra configure_ai.command e informe apenas as chaves dos provedores que deseja
+usar. As chaves não acompanham este pacote.
+
+PARA ENCERRAR
+
+Abra stop_olympus.command.
+
+Se houver erro, envie os arquivos abaixo sem enviar o conteúdo de backend/.env:
+
+- .olympus/runtime/backend.log
+- .olympus/runtime/frontend.log
+- .olympus/runtime/omniroute.log

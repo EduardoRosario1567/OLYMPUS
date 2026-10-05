@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências do backend
+        run: pip install -r backend/requirements.txt pytest
+
+      - name: Preparar .env
+        run: |
+          cp backend/.env.example backend/.env
+          sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+
+      - name: Rodar suíte de testes (unittest via pytest)
+        run: |
+          export PYTHONPATH=.
+          pytest tests/ -v
+
+      - name: Subir backend em background
+        run: |
+          export PYTHONPATH=.
+          nohup uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+          echo $! > backend.pid
+
+      - name: Esperar o backend responder
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "backend respondeu"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "backend não respondeu a tempo"
+          cat backend.log
+          exit 1
+
+      - name: Healthcheck
+        run: curl -f http://localhost:8000/health
+
+      - name: Seed — primeira execução (cria dados)
+        run: |
+          export PYTHONPATH=.
+          python3 scripts/seed_demo.py
+
+      - name: Seed — segunda execução (deve ser idempotente, não duplicar)
+        run: |
+          export PYTHONPATH=.
+          SAIDA=$(python3 scripts/seed_demo.py)
+          echo "$SAIDA"
+          echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
+
+      - name: Login (autenticação real via HTTP)
+        run: |
+          RESP=$(curl -sf -X POST http://localhost:8000/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@olympus.local","senha":"ci-test-password"}')
+          echo "$RESP" | python3 -c "import sys,json; json.load(sys.stdin)['access_token']" \
+            || (echo "login não retornou access_token" && exit 1)
+          TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Chamar endpoints protegidos com o token real
+        run: |
+          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
+          echo
+          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
+          echo
+          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
+          echo
+          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
+          echo
+
+      - name: Confirmar que endpoint protegido rejeita sem token (401)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
+          [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
+
+      - name: Logs do backend (sempre, pra depurar se algo falhar)
+        if: always()
+        run: cat backend.log || true
+
+      - name: Encerrar backend
+        if: always()
+        run: kill "$(cat backend.pid)" 2>/dev/null || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependências
+        working-directory: frontend
+        # sem package-lock.json commitado ainda (gerado na primeira instalação real) — `npm ci`
+        # exigiria o lockfile presente; usamos install até o lockfile existir no repo.
+        run: npm install
+
+      - name: Preparar .env.local
+        working-directory: frontend
+        run: cp .env.local.example .env.local
+
+      - name: Build de produção
+        working-directory: frontend
+        run: npm run build
+
+      - name: Subir em modo produção
+        working-directory: frontend
+        run: |
+          nohup npm run start > ../frontend.log 2>&1 &
+          echo $! > ../frontend.pid
+
+      - name: Esperar o frontend responder
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "frontend respondeu"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "frontend não respondeu a tempo"
+          cat frontend.log
+          exit 1
+
+      - name: Confirmar página de login carrega (redireciona pra /login)
+        run: curl -sfL http://localhost:3000 -o /tmp/home.html && grep -qi "olympus" /tmp/home.html
+
+      - name: Logs do frontend (sempre, pra depurar se algo falhar)
+        if: always()
+        run: cat frontend.log || true
+
+      - name: Encerrar frontend
+        if: always()
+        run: kill "$(cat frontend.pid)" 2>/dev/null || true

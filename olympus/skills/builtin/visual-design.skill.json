@@ -1,0 +1,48 @@
+{
+  "id": "visual-design",
+  "name": "Visual Design",
+  "version": "1.1.0",
+  "description": "Creates a polished, coherent and responsive visual system.",
+  "triggers": [
+    "design",
+    "visual",
+    "layout",
+    "landing page",
+    "interface",
+    "tela",
+    "responsiv",
+    "profissional"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [],
+  "guidance": [
+    "Define one visual direction for the actual brand: audience, mood, typography roles, color tokens, spacing rhythm and imagery. For a cafe favor place, product and atmosphere; do not invent photographs of its real premises.",
+    "Design the first viewport as a coherent composition with recognizable brand, concise promise, primary action and purposeful imagery where relevant. Avoid interchangeable generic cards, decorative badges and competing headlines.",
+    "Adapt composition and image crops intentionally for desktop/mobile; check focus, contrast, reduced motion and text over imagery. Judge the rendered result, not CSS length. Keep visual review pending until actually inspected."
+  ],
+  "completion_checks": [
+    "The page has a coherent visual system and clear hierarchy.",
+    "Desktop and mobile layouts remain readable and balanced.",
+    "The result does not look like an unstyled scaffold."
+  ],
+  "reference_sources": [
+    {
+      "name": "OpenAI — Designing delightful frontends",
+      "url": "https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4",
+      "use": "Direction, content, relevant imagery and rendered review; original adaptation, not an imported skill."
+    },
+    {
+      "name": "Anthropic — frontend-design",
+      "url": "https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md",
+      "use": "Brand-specific typography/composition and critique; original adaptation, not an imported skill."
+    }
+  ]
+}

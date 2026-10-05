@@ -1,0 +1,55 @@
+{
+  "id": "ui-ux-pro-max",
+  "name": "UI/UX Pro Max",
+  "version": "1.0.0",
+  "description": "Selects an intentional interface system from product context instead of relying on generic visual guesses.",
+  "triggers": [
+    "ui/ux",
+    "ui ux",
+    "design system",
+    "sistema de design",
+    "paleta",
+    "tipografia",
+    "dashboard",
+    "aplicativo mobile",
+    "interface profissional"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "product-experience",
+    "visual-design",
+    "accessibility",
+    "testing"
+  ],
+  "constraints": [
+    "Select styles from the product, audience and platform; do not default to fashionable effects.",
+    "Do not add a framework, font dependency or component library unless the project already permits it.",
+    "Text, controls and layouts must survive localization, zoom and narrow viewports."
+  ],
+  "guidance": [
+    "Derive the interface pattern, visual style, palette, typography, spacing and interaction behavior from the product category and user task.",
+    "State the chosen design direction and the anti-patterns to avoid before implementing substantial UI.",
+    "Use a compact token system for colors, type, spacing, radius, shadows and motion.",
+    "Design information density, navigation and feedback for the target platform rather than copying a desktop layout everywhere.",
+    "Check contrast, focus, reduced motion, long text, touch targets, empty states, loading, errors and responsive breakpoints."
+  ],
+  "completion_checks": [
+    "The product context clearly explains the selected pattern and visual direction.",
+    "Colors, typography, spacing, radius and states form a consistent system.",
+    "The interface handles desktop, mobile, zoom and longer content without clipping.",
+    "Accessibility and interaction states are implemented rather than described only.",
+    "The result avoids the identified industry and platform anti-patterns."
+  ],
+  "category": "design",
+  "status": "active",
+  "source_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}

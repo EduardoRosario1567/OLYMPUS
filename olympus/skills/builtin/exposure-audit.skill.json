@@ -1,0 +1,29 @@
+{
+  "id": "exposure-audit",
+  "name": "Exposure Audit",
+  "version": "1.0.0",
+  "description": "Finds accidentally exposed credentials, sensitive files and unsafe secret handling before delivery.",
+  "triggers": ["exposure audit", "auditoria de exposição", "chaves expostas", "api key exposta", "segredos no código", "vazamento de credenciais"],
+  "allowed_actions": ["read_file", "search_code", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["security", "testing"],
+  "constraints": [
+    "Never print, copy or return a complete discovered secret.",
+    "Do not revoke credentials, rewrite history or modify external systems without explicit authority.",
+    "Report only evidence from inspected files and checks."
+  ],
+  "guidance": [
+    "Inspect tracked configuration, examples, logs, fixtures, frontend bundles and documentation for credential patterns.",
+    "Report findings with redacted evidence, location, exposure path and remediation priority.",
+    "Replace committed values with protected references or safe examples where authorized.",
+    "Verify ignore rules and ensure client-side code does not receive server-only credentials.",
+    "Separate code remediation from external revocation steps that require the credential owner."
+  ],
+  "completion_checks": [
+    "No full secret appears in the report or test output.",
+    "Every verified exposure has a location, severity and remediation path.",
+    "Authorized repository repairs pass the relevant tests.",
+    "Required external revocations remain explicit and are not falsely marked complete."
+  ],
+  "category": "security",
+  "status": "active"
+}

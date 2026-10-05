@@ -1,0 +1,29 @@
+{
+  "id": "context-efficiency",
+  "name": "Context Efficiency",
+  "version": "1.0.0",
+  "description": "Minimizes repeated context and token use while preserving decisions, deltas and verified progress.",
+  "triggers": ["caveman", "ponytail", "economizar tokens", "reduzir tokens", "contexto compacto", "token budget", "menos tokens"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": [],
+  "constraints": [
+    "Never remove a requirement, safety constraint or unresolved failure merely to shorten context.",
+    "Do not reread or restate unchanged material when a verified summary or checkpoint exists.",
+    "Compression must preserve filenames, decisions, completed actions, evidence and next required delta."
+  ],
+  "guidance": [
+    "Start from the latest trusted checkpoint and request only the missing delta.",
+    "Represent state as goal, fixed constraints, completed work, evidence, open failure and next action.",
+    "Prefer repository search and focused file ranges over repeatedly loading whole files.",
+    "Pass a compact continuation packet during failover instead of rebuilding the mission from the original prompt.",
+    "Avoid duplicating instructions already enforced by active Olympus skills."
+  ],
+  "completion_checks": [
+    "The continuation packet is sufficient to resume without repeating completed work.",
+    "No acceptance criterion or unresolved error was lost during compression.",
+    "Previously completed mutations are protected by their idempotency keys.",
+    "The next model receives the smallest context that still supports a correct next action."
+  ],
+  "category": "reliability",
+  "status": "active"
+}

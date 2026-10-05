@@ -1,0 +1,31 @@
+{
+  "id": "spec-driven-development",
+  "name": "Spec-Driven Development",
+  "version": "1.0.0",
+  "description": "Preserves intent through specification, plan, tasks, implementation and cross-artifact verification.",
+  "triggers": ["spec kit", "spec-driven", "specification driven", "desenvolvimento por especificação", "especificação antes do código", "critérios de aceite"],
+  "allowed_actions": ["read_file", "search_code", "create_file", "patch_file", "run_test", "inspect_result", "finish"],
+  "depends_on": ["documentation", "coding", "testing"],
+  "constraints": [
+    "Specifications must reflect user intent and known constraints; do not invent requirements.",
+    "Keep artifacts proportional to the work instead of generating ceremonial documentation.",
+    "When implementation conflicts with the approved specification, expose the conflict before changing intent."
+  ],
+  "guidance": [
+    "Write a concise specification containing outcome, users, scope, constraints and observable acceptance criteria.",
+    "Translate the specification into an implementation plan and tasks with explicit dependencies.",
+    "Carry stable identifiers for requirements and checks across the artifacts.",
+    "Implement from the current task while retaining prior verified artifacts as context.",
+    "Run a final consistency review across specification, plan, tasks, code and tests."
+  ],
+  "completion_checks": [
+    "Every implemented behavior maps to an in-scope requirement or documented repair.",
+    "Every acceptance criterion has evidence or an explicit unresolved status.",
+    "Specification, plan and implementation contain no known contradiction.",
+    "The artifact set is concise enough to reuse as continuation context."
+  ],
+  "category": "engineering",
+  "status": "active",
+  "source_url": "https://github.com/github/spec-kit",
+  "license": "MIT — methodology adapted into an Olympus-owned contract"
+}

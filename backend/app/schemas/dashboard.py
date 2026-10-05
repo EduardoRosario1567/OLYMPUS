@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -21,5 +23,5 @@ class DashboardSummaryResponse(BaseModel):
     taxa_sucesso: float
     fallback_rate: float
     total_decisoes: int
-    modelo_mais_usado: str | None
+    modelo_mais_usado: Optional[str]
     agentes_implementado: bool

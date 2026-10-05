@@ -9,6 +9,8 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+import atexit
+import weakref
 from typing import Optional
 
 DDL = """
@@ -68,6 +70,48 @@ CREATE TABLE IF NOT EXISTS logs (
     metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS execution_results (
+    id TEXT PRIMARY KEY,
+    execution_id TEXT NOT NULL REFERENCES execucoes(id),
+    decision_record_id TEXT NOT NULL REFERENCES decisao_registros(id),
+    requested_model TEXT NOT NULL,
+    actual_model TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    output TEXT NOT NULL,
+    latency_ms INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL DEFAULT 0,
+    success INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    status TEXT NOT NULL DEFAULT 'success' CHECK (
+        status IN ('success','timeout','provider_error','billing_error',
+                   'unavailable','rate_limited','authentication_error',
+                   'malformed_response','unknown_error')
+    ),
+    correlation_id TEXT,
+    usage TEXT,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_results_execution_id ON execution_results(execution_id);
+CREATE INDEX IF NOT EXISTS idx_execution_results_decision_record_id ON execution_results(decision_record_id);
+CREATE INDEX IF NOT EXISTS idx_execution_results_created_at ON execution_results(created_at);
+
+CREATE TABLE IF NOT EXISTS quality_evaluations (
+    id TEXT PRIMARY KEY,
+    execution_result_id TEXT NOT NULL REFERENCES execution_results(id),
+    quality_score REAL NOT NULL CHECK (quality_score >= 0 AND quality_score <= 1),
+    passed INTEGER NOT NULL DEFAULT 0,
+    evaluator TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    criteria TEXT NOT NULL DEFAULT '{}',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_evaluations_execution_result_id ON quality_evaluations(execution_result_id);
+CREATE INDEX IF NOT EXISTS idx_quality_evaluations_created_at ON quality_evaluations(created_at);
 """
 
 
@@ -75,13 +119,50 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_LIVE_REPOSITORIES = weakref.WeakSet()
+
+
+def _close_live_repositories() -> None:
+    for repo in list(_LIVE_REPOSITORIES):
+        try:
+            repo.close()
+        except Exception:
+            pass
+
+
+atexit.register(_close_live_repositories)
+
+
 class SQLiteDevRepository:
     """Cumpre RepositorioPersistencia (db/interfaces.py) usando sqlite3 puro."""
 
     def __init__(self, path: str = ":memory:") -> None:
-        self.conn = sqlite3.connect(path)
+        # FastAPI executa endpoints síncronos em uma thread pool. O repositório
+        # é compartilhado pelo runtime local, portanto a conexão precisa poder
+        # ser usada pelas threads de requisição (SQLite continua serializando
+        # o acesso internamente).
+        self.conn = sqlite3.connect(path, check_same_thread=False)
+        _LIVE_REPOSITORIES.add(self)
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.conn.executescript(DDL)
+
+    def close(self) -> None:
+        conn = getattr(self, "conn", None)
+        if conn is not None:
+            conn.close()
+            self.conn = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def criar_execucao(self, project_id: str) -> str:
         execucao_id = str(uuid.uuid4())
@@ -341,3 +422,215 @@ class SQLiteDevRepository:
             "total_decisoes_com_desvio": total_decisoes_com_desvio,
             "modelo_mais_usado": modelo_mais_usado,
         }
+
+    # ---- execution_results (PATCH 004B) ----
+
+    def registrar_execution_result(
+        self,
+        *,
+        execution_id: str,
+        decision_record_id: str,
+        requested_model: str,
+        actual_model: str,
+        provider: str,
+        output: str,
+        latency_ms: int,
+        cost: float,
+        success: bool,
+        error: Optional[str] = None,
+        status: str = "success",
+        correlation_id: Optional[str] = None,
+        usage: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste um resultado de execução real e retorna seu id."""
+        result_id = str(uuid.uuid4())
+        self.conn.execute(
+            """INSERT INTO execution_results
+               (id, execution_id, decision_record_id, requested_model, actual_model,
+                provider, output, latency_ms, cost, success, error, status,
+                correlation_id, usage, metadata, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                result_id, execution_id, decision_record_id, requested_model, actual_model,
+                provider, output, latency_ms, (0.0 if cost is None else cost),
+                1 if success else 0, error, status,
+                correlation_id, json.dumps(usage or {}), json.dumps(metadata or {}), _now(),
+            ),
+        )
+        return result_id
+
+    def obter_execution_result(self, result_id: str) -> Optional[dict]:
+        """Obtém um resultado de execução por id."""
+        cur = self.conn.execute(
+            """SELECT id, execution_id, decision_record_id, requested_model, actual_model,
+                      provider, output, latency_ms, cost, success, error, status,
+                      correlation_id, usage, metadata, created_at
+               FROM execution_results WHERE id = ?""",
+            (result_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        colunas = [d[0] for d in cur.description]
+        result = dict(zip(colunas, row))
+        # Converter fields JSON
+        if result["usage"]:
+            result["usage"] = json.loads(result["usage"])
+        if result["metadata"]:
+            result["metadata"] = json.loads(result["metadata"])
+        result["success"] = bool(result["success"])
+        return result
+
+    def obter_execution_result_por_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém o resultado de execução associado a um decision_record_id."""
+        cur = self.conn.execute(
+            """SELECT id, execution_id, decision_record_id, requested_model, actual_model,
+                      provider, output, latency_ms, cost, success, error, status,
+                      correlation_id, usage, metadata, created_at
+               FROM execution_results WHERE decision_record_id = ?""",
+            (decision_record_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        colunas = [d[0] for d in cur.description]
+        result = dict(zip(colunas, row))
+        if result["usage"]:
+            result["usage"] = json.loads(result["usage"])
+        if result["metadata"]:
+            result["metadata"] = json.loads(result["metadata"])
+        result["success"] = bool(result["success"])
+        return result
+
+    def obter_decisao(self, decision_record_id: str) -> Optional[dict]:
+        """Obtém um registro de decisão por id."""
+        cur = self.conn.execute(
+            """SELECT id, project_id, task_id, execution_id, input_type, task_description,
+                      selected_provider, selected_model, candidate_models, policy_applied,
+                      decision_reason, confidence_score, estimated_cost, estimated_latency_ms,
+                      status, created_at, updated_at
+               FROM decisao_registros WHERE id = ?""",
+            (decision_record_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        colunas = [d[0] for d in cur.description]
+        result = dict(zip(colunas, row))
+        if result["candidate_models"]:
+            result["candidate_models"] = json.loads(result["candidate_models"])
+        return result
+
+    def listar_execution_results(
+        self,
+        limit: int = 50,
+        execution_id: Optional[str] = None,
+        decision_record_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista resultados de execução com filtros opcionais."""
+        condicoes, params = [], []
+        if execution_id is not None:
+            condicoes.append("execution_id = ?")
+            params.append(execution_id)
+        if decision_record_id is not None:
+            condicoes.append("decision_record_id = ?")
+            params.append(decision_record_id)
+        where = f"WHERE {' AND '.join(condicoes)}" if condicoes else ""
+
+        cur = self.conn.execute(
+            f"""SELECT id, execution_id, decision_record_id, requested_model, actual_model,
+                       provider, output, latency_ms, cost, success, error, status,
+                       correlation_id, usage, metadata, created_at
+                FROM execution_results {where} ORDER BY created_at DESC LIMIT ?""",
+            (*params, limit),
+        )
+        colunas = [d[0] for d in cur.description]
+        resultados = []
+        for row in cur.fetchall():
+            result = dict(zip(colunas, row))
+            if result["usage"]:
+                result["usage"] = json.loads(result["usage"])
+            if result["metadata"]:
+                result["metadata"] = json.loads(result["metadata"])
+            result["success"] = bool(result["success"])
+            resultados.append(result)
+        return resultados
+
+    # ---- quality_evaluations (PATCH 005D) ----
+
+    def registrar_quality_evaluation(
+        self,
+        *,
+        execution_result_id: str,
+        quality_score: float,
+        passed: bool,
+        evaluator: str,
+        reason: str,
+        criteria: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """Persiste uma avaliação de qualidade e retorna seu id."""
+        eval_id = str(uuid.uuid4())
+        self.conn.execute(
+            """INSERT INTO quality_evaluations
+               (id, execution_result_id, quality_score, passed, evaluator, reason,
+                criteria, metadata, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                eval_id, execution_result_id, quality_score,
+                1 if passed else 0, evaluator, reason,
+                json.dumps(criteria or {}), json.dumps(metadata or {}), _now(),
+            ),
+        )
+        return eval_id
+
+    def obter_quality_evaluation(self, evaluation_id: str) -> Optional[dict]:
+        """Obtém uma avaliação de qualidade por id."""
+        cur = self.conn.execute(
+            """SELECT id, execution_result_id, quality_score, passed, evaluator, reason,
+                      criteria, metadata, created_at
+               FROM quality_evaluations WHERE id = ?""",
+            (evaluation_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        colunas = [d[0] for d in cur.description]
+        result = dict(zip(colunas, row))
+        if result["criteria"]:
+            result["criteria"] = json.loads(result["criteria"])
+        if result["metadata"]:
+            result["metadata"] = json.loads(result["metadata"])
+        result["passed"] = bool(result["passed"])
+        return result
+
+    def listar_quality_evaluations(
+        self,
+        limit: int = 50,
+        execution_result_id: Optional[str] = None,
+    ) -> list[dict]:
+        """Lista avaliações de qualidade com filtros opcionais."""
+        condicoes, params = [], []
+        if execution_result_id is not None:
+            condicoes.append("execution_result_id = ?")
+            params.append(execution_result_id)
+        where = f"WHERE {' AND '.join(condicoes)}" if condicoes else ""
+
+        cur = self.conn.execute(
+            f"""SELECT id, execution_result_id, quality_score, passed, evaluator, reason,
+                       criteria, metadata, created_at
+                FROM quality_evaluations {where} ORDER BY created_at DESC LIMIT ?""",
+            (*params, limit),
+        )
+        colunas = [d[0] for d in cur.description]
+        resultados = []
+        for row in cur.fetchall():
+            result = dict(zip(colunas, row))
+            if result["criteria"]:
+                result["criteria"] = json.loads(result["criteria"])
+            if result["metadata"]:
+                result["metadata"] = json.loads(result["metadata"])
+            result["passed"] = bool(result["passed"])
+            resultados.append(result)
+        return resultados

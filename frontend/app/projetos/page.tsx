@@ -2,98 +2,54 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { PainelShell } from "@/components/layout/painel-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useRequireAuth } from "@/hooks/useAuth";
-import { api } from "@/services/api";
-import type { Projeto } from "@/types/dashboard";
+import { api, type CloudProject } from "@/services/api";
 
-function formatarData(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR");
+function formatarData(value: number) {
+  return new Date(value * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 export default function ProjetosPage() {
   const pronto = useRequireAuth();
-  const [projetos, setProjetos] = useState<Projeto[] | null>(null);
+  const [projetos, setProjetos] = useState<CloudProject[] | null>(null);
+  const [nome, setNome] = useState("");
+  const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pronto) return;
-    api
-      .listarProjetos()
-      .then(setProjetos)
-      .catch(() => setErro("Não foi possível carregar os projetos."));
+    api.listarCloudProjetos().then(setProjetos).catch(() => setErro("Não foi possível carregar seus projetos."));
   }, [pronto]);
+
+  async function criar() {
+    if (!nome.trim() || criando) return;
+    setCriando(true); setErro(null);
+    try {
+      const projeto = await api.criarCloudProjeto({ name: nome.trim() });
+      setProjetos((current) => [projeto, ...(current ?? [])]);
+      setNome("");
+    } catch { setErro("Não foi possível criar o projeto."); }
+    finally { setCriando(false); }
+  }
+
+  async function baixar(projeto: CloudProject) {
+    try { await api.baixarCloudProjeto(projeto.project_id); setErro(null); }
+    catch { setErro(`Não foi possível baixar ${projeto.name}.`); }
+  }
 
   if (!pronto) return null;
 
-  return (
-    <PainelShell>
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <header className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-50">Projetos</h1>
-            <p className="text-sm text-zinc-500">Projetos ativos no sistema de orquestração</p>
-          </div>
-          {/* fluxo de criação completo ainda não existe no backend */}
-          <Button variant="ghost" disabled title="Em breve">
-            Criar projeto (em breve)
-          </Button>
-        </header>
-
-        {erro && <p className="mb-6 text-sm text-red-400">{erro}</p>}
-        {!projetos && !erro && <p className="text-sm text-zinc-500">Carregando...</p>}
-
-        {projetos && (
-          <Card className="overflow-hidden p-0">
-            {projetos.length === 0 ? (
-              <p className="px-6 py-8 text-center text-sm text-zinc-600">
-                Nenhum projeto criado ainda.
-              </p>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-zinc-500">
-                    <th className="px-6 py-3 font-medium">Nome</th>
-                    <th className="px-6 py-3 font-medium">Tipo</th>
-                    <th className="px-6 py-3 font-medium">Complexidade</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Criado em</th>
-                    <th className="px-6 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projetos.map((p) => (
-                    <tr key={p.id} className="border-b border-white/5 last:border-0">
-                      <td className="px-6 py-3">
-                        <p className="text-zinc-200">{p.name}</p>
-                        {p.description && (
-                          <p className="mt-0.5 max-w-xs truncate text-xs text-zinc-500">{p.description}</p>
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-zinc-400">{p.product_type ?? "não disponível"}</td>
-                      <td className="px-6 py-3 text-zinc-400">{p.complexity ?? "não disponível"}</td>
-                      <td className="px-6 py-3 capitalize text-zinc-400">{p.status}</td>
-                      <td className="px-6 py-3 text-zinc-400">{formatarData(p.created_at)}</td>
-                      <td className="px-6 py-3">
-                        <div className="flex gap-3 text-xs">
-                          <Link href={`/execucoes?project_id=${p.id}`} className="text-zinc-400 hover:text-zinc-100">
-                            Execuções
-                          </Link>
-                          <Link href={`/logs?project_id=${p.id}`} className="text-zinc-400 hover:text-zinc-100">
-                            Logs
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
-        )}
-      </main>
-    </PainelShell>
-  );
+  return <PainelShell>
+    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <header className="mb-8"><p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-700">Seu espaço</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-zinc-100">Projetos</h1><p className="mt-2 text-sm text-zinc-500">Continue uma criação, consulte versões ou baixe seus arquivos.</p></header>
+      <div className="mb-6 flex gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-2"><Input value={nome} onChange={(event) => setNome(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void criar(); } }} placeholder="Nome do novo projeto" /><Button type="button" onClick={criar} disabled={!nome.trim() || criando}>{criando ? "Criando" : "Criar projeto"}</Button></div>
+      {erro && <p className="mb-4 rounded-xl bg-rose-400/[0.07] px-4 py-3 text-sm text-rose-200/80">{erro}</p>}
+      {!projetos && !erro && <p className="py-16 text-center text-sm text-zinc-600">Carregando projetos...</p>}
+      {projetos?.length === 0 && <div className="rounded-2xl border border-dashed border-white/[0.08] py-16 text-center"><p className="text-sm text-zinc-500">Seu primeiro projeto começa com uma ideia.</p><Link href="/missao" className="mt-4 inline-flex rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black">Nova missão</Link></div>}
+      <div className="grid gap-3 sm:grid-cols-2">{projetos?.map((projeto) => <article key={projeto.project_id} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 transition hover:border-white/[0.12] hover:bg-white/[0.03]"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="truncate font-medium text-zinc-200">{projeto.name}</h2><p className="mt-1 text-xs text-zinc-600">Atualizado em {formatarData(projeto.updated_at)}</p></div><span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400/80" /></div><div className="mt-6 flex items-center gap-2"><Link href={`/missao?project_id=${encodeURIComponent(projeto.project_id)}`} className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-black hover:bg-zinc-200">Abrir projeto</Link><button type="button" onClick={() => void baixar(projeto)} className="rounded-lg px-3 py-2 text-xs text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200">Baixar</button></div></article>)}</div>
+    </main>
+  </PainelShell>;
 }

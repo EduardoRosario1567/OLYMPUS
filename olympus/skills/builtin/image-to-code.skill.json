@@ -1,0 +1,54 @@
+{
+  "id": "image-to-code",
+  "name": "Image to Code",
+  "version": "1.0.0",
+  "description": "Translates authorized screenshots or visual references into a functional responsive implementation.",
+  "triggers": [
+    "image to code",
+    "imagem para código",
+    "screenshot para código",
+    "reproduzir esta tela",
+    "baseado nesta imagem",
+    "reference image",
+    "figma para código",
+    "mockup para código"
+  ],
+  "allowed_actions": [
+    "read_file",
+    "search_code",
+    "create_file",
+    "patch_file",
+    "run_test",
+    "inspect_result",
+    "finish"
+  ],
+  "depends_on": [
+    "frontend",
+    "visual-design",
+    "accessibility",
+    "testing"
+  ],
+  "constraints": [
+    "Use only user-provided or authorized visual references.",
+    "Do not infer hidden interactions, assets, text or responsive states as facts; label necessary implementation assumptions.",
+    "Match visual structure without reproducing protected brand assets unless the user supplied or authorized them."
+  ],
+  "guidance": [
+    "Inspect every reference before coding and inventory layout, hierarchy, type, color, spacing, radius, imagery, components and visible states.",
+    "Derive a compact design token set and component structure before implementing the full screen.",
+    "Preserve the target project's stack and existing conventions unless the user explicitly requests a change.",
+    "Implement responsive behavior from design intent rather than scaling the screenshot as one fixed canvas.",
+    "Compare the implementation against the references, then repair the largest structural and visual differences first."
+  ],
+  "completion_checks": [
+    "All supplied references were inspected and their visible states were accounted for.",
+    "The implementation is functional, semantic and responsive rather than a static image replica.",
+    "Typography, hierarchy, spacing, color and component geometry are coherently matched.",
+    "Assumed content or behavior is explicitly distinguishable from observed facts.",
+    "No inaccessible image-only control or unauthorized protected asset remains."
+  ],
+  "category": "design",
+  "status": "active",
+  "source_url": "https://github.com/Leonxlnx/taste-skill",
+  "license": "MIT — concepts adapted into an Olympus-owned contract"
+}
