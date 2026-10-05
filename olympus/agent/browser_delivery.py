@@ -28,7 +28,18 @@ class BrowserRuntime:
         chrome = Path('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
         if not executable and sys.platform == 'darwin' and chrome.is_file():
             executable = str(chrome)
-        return cls(str(APP_ROOT/'frontend/node_modules'), executable)
+        sandbox_setting = os.environ.get(
+            'OLYMPUS_BROWSER_CHROMIUM_SANDBOX', ''
+        ).strip().lower()
+        chromium_sandbox = (
+            True if not sandbox_setting
+            else sandbox_setting not in {'0', 'false', 'no', 'off'}
+        )
+        return cls(
+            str(APP_ROOT/'frontend/node_modules'),
+            executable,
+            chromium_sandbox=chromium_sandbox,
+        )
 
 
 class WebDeliveryVerifier:
