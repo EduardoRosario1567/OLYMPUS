@@ -27,6 +27,21 @@ FINAL_HTML = """<!doctype html>
 <style>body{margin:0;background:#0b1220;color:#f7fbff;font-family:system-ui,sans-serif}main{width:min(760px,calc(100% - 32px));margin:0 auto;padding:64px 0}nav{display:flex;gap:18px;margin-bottom:28px}nav a{color:#73e0ff}section{padding:28px;margin-top:20px;border:1px solid #304866;border-radius:20px;background:#111d31}h1{font-size:clamp(2rem,7vw,4rem);line-height:1.05}p{color:#b9c7d8;line-height:1.65}button{border:0;border-radius:12px;padding:14px 20px;background:#73e0ff;color:#06111c;font-weight:800;cursor:pointer}@media(max-width:640px){main{padding:32px 0}}</style>
 </head><body><main><nav aria-label="Navegação principal"><a href="#inicio">Início</a><a href="#processo">Processo</a><a href="#entrega">Entrega</a></nav><section id="inicio"><p>OLYMPUS · RESULTADO VERIFICADO</p><h1>Missão concluída com continuidade.</h1><p>Esta entrega foi criada, reparada, validada e publicada após uma troca de provedor. O artefato permanece disponível mesmo quando a primeira rota falha.</p></section><section id="processo"><h2>Processo preservado</h2><p>O checkpoint manteve o trabalho produzido e permitiu continuar a missão em uma rota gratuita independente.</p></section><section id="entrega"><h2>Interação validada</h2><button id="btn-teste" type="button" onclick="this.textContent='Botão funcionando';document.getElementById('status').textContent='Interação validada'">Testar interação</button><p id="status" aria-live="polite">Aguardando interação</p></section></main></body></html>"""
 
+DELIVERY_CONCEPT = """# Delivery Concept
+
+## Visual thesis
+A interface usa contraste alto, hierarquia clara, tipografia de sistema e uma composição responsiva deliberada para manter leitura e interação consistentes em desktop, tablet e mobile.
+
+## Content plan
+O conteúdo confirma somente fatos demonstrados pelo próprio teste: continuidade após failover, preservação do trabalho e disponibilidade do artefato final. Nenhuma afirmação externa ou dado não verificado é introduzido.
+
+## Interaction plan
+O botão identificado por btn-teste deve responder ao clique alterando seu texto para Botão funcionando e atualizando a região de status para Interação validada.
+
+## Evidence
+Confirmed facts: o HTML foi criado pelo fluxo da missão e a interação será validada por runtime DOM real. Unknown facts: não existem dados comerciais ou de produção envolvidos neste cenário sintético. Review limits: este gate valida entrega, failover, preview e interação; não representa aprovação humana de design.
+"""
+
 
 class BrowserUnavailable(RuntimeError):
     pass
@@ -61,11 +76,45 @@ class Handler(BaseHTTPRequestHandler):
         if model == "blind/fallback":
             if state["fallback_calls"] == 0:
                 state["fallback_calls"] += 1
-                content = json.dumps({"type": "create_file", "target": "app/index.html", "payload": FINAL_HTML, "reason": "deliver verified interactive page"}, ensure_ascii=False)
+                content = json.dumps(
+                    {
+                        "type": "create_file",
+                        "target": "app/index.html",
+                        "payload": FINAL_HTML,
+                        "reason": "deliver verified interactive page",
+                    },
+                    ensure_ascii=False,
+                )
+            elif state["fallback_calls"] == 1:
+                state["fallback_calls"] += 1
+                content = json.dumps(
+                    {
+                        "type": "create_file",
+                        "target": "docs/delivery-concept.md",
+                        "payload": DELIVERY_CONCEPT,
+                        "reason": "satisfy the trusted web delivery concept contract",
+                    },
+                    ensure_ascii=False,
+                )
             else:
                 state["fallback_calls"] += 1
-                content = json.dumps({"type": "finish", "target": None, "payload": "verified", "reason": "browser contract passed"})
-            self._json(200, {"id": "blind", "choices": [{"message": {"role": "assistant", "content": content}}]})
+                content = json.dumps(
+                    {
+                        "type": "finish",
+                        "target": None,
+                        "payload": "verified",
+                        "reason": "delivery contract completed",
+                    }
+                )
+            self._json(
+                200,
+                {
+                    "id": "blind",
+                    "choices": [
+                        {"message": {"role": "assistant", "content": content}}
+                    ],
+                },
+            )
             return
         self._json(400, {"error": {"message": "unknown model"}})
 
@@ -91,7 +140,7 @@ const { chromium } = require('playwright');
   const status = await page.locator('#status').textContent();
   await browser.close();
   if (button !== 'Botão funcionando' || status !== 'Interação validada') process.exit(2);
-  console.log(JSON.stringify({button, status}));
+  console.log(JSON.stringify({result: button, status, validator: 'playwright'}));
 })().catch(error => { console.error(error.stack || error); process.exit(1); });
 '''
     browser_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
@@ -165,7 +214,9 @@ def main() -> int:
                 record = runtime.get(execution.execution_id)
             if record.status != "completed":
                 raise RuntimeError("blind mission ended as %s: %s; calls=%s; summary=%s; events=%s" % (record.status, record.error, server.state["calls"], record.result_summary, runtime.events(execution.execution_id)))
-            root_file = runtime.projects.project_root("blind-mission") / "app" / "index.html"
+            project_root = runtime.projects.project_root("blind-mission")
+            root_file = project_root / "app" / "index.html"
+            concept_file = project_root / "docs" / "delivery-concept.md"
             previews = ProjectPreviewSessions(runtime.projects)
             preview = previews.create("blind-mission")
             _, preview_file = previews.resolve(preview.token)
@@ -177,8 +228,9 @@ def main() -> int:
             checks = {
                 "completed": record.status == "completed",
                 "primary_failed": server.state["calls"].count("blind/primary") >= 1,
-                "fallback_used": server.state["calls"].count("blind/fallback") >= 2,
+                "fallback_used": server.state["calls"].count("blind/fallback") >= 3,
                 "published": root_file.is_file(),
+                "delivery_concept_created": concept_file.is_file(),
                 "previewable": preview.entrypoint == "app/index.html",
                 "browser_click": browser.get("result") == "Botão funcionando" and browser.get("status") == "Interação validada",
                 "browser_validator_present": browser.get("validator", "playwright") in {"playwright", "jsdom-runtime"},
