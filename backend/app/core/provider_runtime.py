@@ -992,6 +992,13 @@ def _agent_compatible_routes(routes):
         # System One typed decisions rather than text/chat completions.
         if "content-safety" in model or model.startswith("jev-"):
             continue
+
+        # Batch variants use a different execution contract/endpoint and
+        # cannot participate in the interactive coding-agent chat loop.
+        # Exclude only the incompatible route, never the whole provider.
+        if model.endswith(":batch"):
+            continue
+
         eligible.append(route)
     return tuple(eligible)
 

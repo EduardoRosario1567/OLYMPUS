@@ -212,6 +212,64 @@ class TestActionNormalizerV203(unittest.TestCase):
                 "value = 1\n",
             )
 
+    def test_planner_repair_explains_patch_contract_for_diff(self):
+        class Router:
+            def __init__(self):
+                self.calls = 0
+
+            def execute(self, model_id, prompt, **kwargs):
+                self.calls += 1
+
+                if self.calls == 1:
+                    output = json.dumps({
+                        "type": "patch_file",
+                        "target": "src/main.py",
+                        "payload": {
+                            "diff": "- value = 1\\n+ value = 7"
+                        },
+                    })
+                else:
+                    self.assert_repair_prompt(prompt)
+                    output = json.dumps({
+                        "type": "patch_file",
+                        "target": "src/main.py",
+                        "payload": {
+                            "old_text": "value = 1",
+                            "new_text": "value = 7",
+                        },
+                    })
+
+                return SimpleNamespace(
+                    success=True,
+                    output=output,
+                    error=None,
+                    actual_model=model_id,
+                    provider="fixture",
+                )
+
+            @staticmethod
+            def assert_repair_prompt(prompt):
+                assert "old_text" in prompt
+                assert "new_text" in prompt
+                assert "Do NOT return unified diff" in prompt
+                assert "diff" in prompt
+
+        router = Router()
+        planner = ModelPlanner(router, "fixture::model")
+
+        action = planner.next_action(
+            "Atualize src/main.py",
+            "{}",
+            SimpleNamespace(snippets={}),
+            (ActionType.PATCH_FILE,),
+        )
+
+        self.assertEqual(router.calls, 2)
+        self.assertEqual(action.type, ActionType.PATCH_FILE)
+        self.assertEqual(action.payload["operation"], "replace_text")
+        self.assertEqual(action.payload["old_text"], "value = 1")
+        self.assertEqual(action.payload["new_content"], "value = 7")
+
     def test_planner_repairs_invalid_patch_contract(self):
         class Router:
             def __init__(self):

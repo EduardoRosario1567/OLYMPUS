@@ -235,13 +235,25 @@ class ModelPlanner:
                 )
             return action
 
+        patch_contract = (
+            "For patch_file, payload MUST use one supported deterministic form: "
+            "{old_text: exact existing text, new_text: replacement text}; "
+            "{operation: replace_lines, start_line: N, end_line: N, new_content: text}; "
+            "{operation: append_block, new_content: text}; or for Python symbols "
+            "{operation: replace_function|insert_before_symbol|insert_after_symbol, "
+            "symbol: name, new_content: text}. "
+            "Do NOT return unified diff, diff, patch text, Markdown fences, or free-form edit instructions. "
+            "When replacing text, old_text must identify exactly one occurrence."
+        )
+
         prompt = (
             "Choose ONE next action for a coding agent. Return JSON only.\n"
             "Schema: {\"type\":\"...\",\"target\":null,\"payload\":null,\"reason\":\"...\"}\n"
             "target MUST be a repository-relative path for read_file, search_code, "
             "create_file, patch_file, and run_test. Only inspect_result and finish "
             "may use null target. For create_file, payload MUST be the complete file content. "
-            "If a large file would exceed the model output budget, create a minimal coherent version first and improve it with bounded patch_file actions in later iterations."
+            "If a large file would exceed the model output budget, create a minimal coherent version first and improve it with bounded patch_file actions in later iterations. "
+            "%s"
             "%s\nNever return finish while State.recent_errors reports deliverable quality; edit the result to satisfy every reported requirement first.\n"
             "State.professional_skill_contract is mandatory when present: follow its guidance and prove every completion check before finish.\n"
             "read_file accepts payload {start_line: 1, max_lines: 40} for bounded line reads. Read omitted requirements before declaring completion; a truncated excerpt is not the whole file.\n"
@@ -252,6 +264,7 @@ class ModelPlanner:
             "For web tasks, create a compact valid page first and improve it in later actions; do not risk a truncated first response.\n"
             "Available actions: %s\nTask: %s\nState: %s\nContext: %s"
             % (
+                patch_contract,
                 target_hint,
                 ", ".join(a.value for a in effective_actions),
                 task,
@@ -278,10 +291,12 @@ class ModelPlanner:
                 "Required schema: {\"type\":\"...\",\"target\":\"relative/path\","
                 "\"payload\":null,\"reason\":\"...\"}.\n"
                 "target is required except for inspect_result and finish.\n"
-                "For create_file, payload must contain the complete file content.%s\n"
+                "For create_file, payload must contain the complete file content. "
+                "%s\n%s\n"
                 "Allowed actions for this task: %s.\n"
                 "Validation error: %s\nInvalid response: %s"
                 % (
+                    patch_contract,
                     target_hint,
                     ", ".join(action.value for action in effective_actions),
                     str(first_error),
