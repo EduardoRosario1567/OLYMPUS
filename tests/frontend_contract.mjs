@@ -52,7 +52,7 @@ await context.route('**/*',async route=>{
  else if(path.endsWith('/download'))return route.fulfill({status:200,contentType:'application/zip',body:'synthetic zip fixture'});
  return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
 });
-async function check(name,fn){try{await fn();checks[name]=true;}catch(e){checks[name]=String(e.stack||e);if(name==='preview'){checks[name]+='\nFRAMES='+JSON.stringify(await Promise.all(page.frames().map(async f=>({url:f.url(),body:await f.locator('body').innerText({timeout:500}).catch(()=>null)}))));if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/preview-failure.png',fullPage:true});}}}
+async function check(name,fn){try{await fn();checks[name]=true;}catch(e){checks[name]=String(e.stack||e);if(name==='preview'){checks[name]+='\nFRAMES='+JSON.stringify(await Promise.all(page.frames().map(async f=>({url:f.url(),body:await f.locator('body').innerText({timeout:500}).catch(()=>null)}))));if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/preview-failure.png',fullPage:true});}}finally{catalogFailure=false;credentialFailure=false;organizationRole='owner';providerItems=[fixtureProvider('fcc','Free Claude Code')];projectItems=[project];}}
 try {
 await check('hydration',async()=>{
  await page.goto(base+'/missao');await page.waitForURL('**/login');
@@ -129,8 +129,8 @@ await check('provider_filters_refresh',async()=>{
  await page.getByRole('button',{name:'Precisam de atenção',exact:true}).click();await expect(page.getByRole('heading',{name:'Free Claude Code',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Todos',exact:true}).click();await page.getByRole('searchbox',{name:'Buscar provedor'}).fill('nenhum-resultado');await expect(page.getByRole('heading',{name:'Nenhum provedor encontrado'})).toBeVisible();
  await page.getByRole('button',{name:'Limpar filtros'}).click();
- catalogFailure=true;await page.getByRole('button',{name:'Atualizar conexões'}).click();await expect(page.getByRole('alert')).toContainText('Conexões temporariamente indisponíveis');await expect(page.getByRole('heading',{name:'Free Claude Code',exact:true})).toBeVisible();
- catalogFailure=false;await page.getByRole('button',{name:'Atualizar conexões'}).click();await expect(page.getByRole('alert')).toHaveCount(0);
+ catalogFailure=true;await page.getByRole('button',{name:'Atualizar conexões'}).click();await expect(page.locator('main').getByRole('alert')).toContainText('Conexões temporariamente indisponíveis');await expect(page.getByRole('heading',{name:'Free Claude Code',exact:true})).toBeVisible();
+ catalogFailure=false;await page.getByRole('button',{name:'Atualizar conexões'}).click();await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
  await expect(page.getByText('Fallback automático',{exact:true})).toHaveCount(0);
  const version=JSON.parse(fs.readFileSync(new URL('../frontend/public/olympus-version.json',import.meta.url)));await expect(page.locator('main').getByText('OLYMPUS '+version.version,{exact:true})).toBeVisible();
  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE){await page.evaluate(()=>document.documentElement.dataset.theme='light');await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/providers-desktop-light.png'});await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/providers-desktop-dark.png'});}
@@ -139,7 +139,7 @@ await check('provider_filters_refresh',async()=>{
 await check('provider_credentials_permissions',async()=>{
  await page.goto(base+'/conexoes');await page.getByRole('heading',{name:'Free Claude Code',exact:true}).click();
  const key=page.getByLabel('Chave da API',{exact:false});await expect(key).toHaveAttribute('type','password');await key.fill('SYNTHETIC_NEW_KEY');credentialFailure=true;
- await page.getByRole('button',{name:'Salvar credenciais'}).click();await expect(page.getByRole('alert')).toContainText('Não foi possível salvar');await expect(key).toHaveValue('SYNTHETIC_NEW_KEY');
+ await page.getByRole('button',{name:'Salvar credenciais'}).click();await expect(page.locator('main').getByRole('alert')).toContainText('Não foi possível salvar');await expect(key).toHaveValue('SYNTHETIC_NEW_KEY');
  credentialFailure=false;await page.getByRole('button',{name:'Salvar credenciais'}).click();await expect(key).toHaveValue('');await expect(page.getByRole('status').filter({hasText:'Credenciais salvas.'})).toBeVisible();
  assert.ok(credentialRequests.length>=2);for(const request of credentialRequests)assert.deepEqual(Object.keys(request.values).sort(),['api_key']);
  organizationRole='viewer';await page.goto(base+'/conexoes');await page.getByRole('heading',{name:'Free Claude Code',exact:true}).click();await expect(page.getByLabel('Chave da API',{exact:false})).toBeDisabled();await expect(page.getByRole('button',{name:'Salvar credenciais'})).toBeDisabled();organizationRole='owner';
@@ -156,7 +156,7 @@ await check('contrast',async()=>{
  await page.goto(base+'/missao');for(const theme of ['light','dark']){
  await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
  const link=page.getByRole('link',{name:'Nova missão',exact:true}).first();await expect(link).toBeVisible();
- assert.ok(await link.evaluate(el=>{const luminance=s=>{const rgb=s.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};let parent=el,bg;while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}const a=luminance(getComputedStyle(el).color),b=luminance(bg);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;}));
+ assert.ok(await link.evaluate(el=>{const luminance=s=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');ctx.fillStyle=s;ctx.fillRect(0,0,1,1);const rgb=Array.from(ctx.getImageData(0,0,1,1).data).slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};let parent=el,bg;while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}const a=luminance(getComputedStyle(el).color),b=luminance(bg);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;}));
  }
 });
 await check('version',async()=>{
@@ -176,7 +176,7 @@ await check('accessible_layout',async()=>{
  for(const width of [390,768,1440]){
   await page.setViewportSize({width,height:1000});
   for(const path of ['/missao','/projetos','/execucoes','/skills','/configuracoes']){
-   await page.goto(base+path);await page.waitForLoadState('networkidle');
+   await page.goto(base+path);await page.locator('#app-content main').first().waitFor({state:'visible'});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),path+' overflows at '+width);
    const missing=await page.locator('input,textarea,select').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&el.type!=='hidden'&&!el.getAttribute('aria-label')&&!el.getAttribute('aria-labelledby')&&!el.labels?.length).map(el=>el.outerHTML));
    assert.deepEqual(missing,[],path+' unnamed controls at '+width);
