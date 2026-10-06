@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 20874)
-Total output lines: 889
-
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -557,7 +554,27 @@ function formatarTamanho(bytes: number) {
 
 type SelectedElement = { selector: string; tag: string; text: string };
 
-function StudioRail({ task, execution, statusText, events, emAndamento, sending, onTask, onStart }: { task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string…874 tokens truncated…& fileDraft !== selectedFile.content);
+function StudioRail({ task, execution, statusText, events, emAndamento, sending, onTask, onStart }: { task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string) => void; onStart: () => void }) {
+  const visibleEvents = events.map((event) => EVENT_LABELS[event.event]).filter((label): label is string => Boolean(label)).slice(-4);
+  return <aside className="hidden min-h-0 flex-col border-r border-white/[0.07] bg-[#141414] md:flex">
+    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="flex items-center gap-3"><OlympusMark className="h-7 w-7" /><div><p className="text-sm font-medium text-zinc-200">Olympus</p><p className="text-[10px] text-zinc-600">Ambiente de construção</p></div></div>
+      <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-xs font-medium text-zinc-300">{execution ? statusText : "Pronto para a próxima alteração"}</p>{visibleEvents.length > 0 && <div className="mt-3 space-y-1.5">{visibleEvents.map((label, index) => <p key={`${label}-${index}`} className="text-[11px] text-zinc-600">• {label}</p>)}</div>}</div>
+    </div>
+    <div className="border-t border-white/[0.07] p-3">
+      <textarea aria-label="Alteração do projeto" value={task} onChange={(event) => onTask(event.target.value)} disabled={emAndamento} rows={4} maxLength={4000} placeholder="Peça uma alteração neste projeto" className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#202020] px-3 py-2.5 text-xs leading-5 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/[0.16] disabled:opacity-50" />
+      <button type="button" onClick={onStart} disabled={sending || emAndamento || !task.trim()} className="mt-2 w-full rounded-lg bg-white px-3 py-2 text-xs font-medium text-black hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-500">{emAndamento ? "Olympus trabalhando" : "Enviar ao Olympus"}</button>
+    </div>
+  </aside>;
+}
+
+function WorkspaceOverlay({ projectId, mode, preview, versions, comparison, selectedVersion, files, selectedFile, fileDraft, runtimeLogs, loading, error, notice, task, execution, statusText, events, emAndamento, sending, onTask, onStart, onMode, onClose, onReload, onDownload, onSaveVersion, onCompare, onRestore, onOpenFile, onDraft, onSaveFile, onElement }: { projectId: string; mode: "preview" | "files" | "versions" | "publish"; preview: CloudPreviewSession | null; versions: CloudProjectVersion[]; comparison: CloudVersionComparison | null; selectedVersion: string | null; files: CloudStudioFile[]; selectedFile: CloudStudioFileContent | null; fileDraft: string; runtimeLogs: CloudRuntimeLog[]; loading: boolean; error: string | null; notice: string | null; task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string) => void; onStart: () => void; onMode: (mode: "preview" | "files" | "versions" | "publish") => void; onClose: () => void; onReload: () => void; onDownload: () => void; onSaveVersion: () => void; onCompare: (versionId: string) => void; onRestore: (version: CloudProjectVersion) => void; onOpenFile: (path: string) => void; onDraft: (value: string) => void; onSaveFile: () => void; onElement: (element: SelectedElement) => void }) {
+  const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [inspectMode, setInspectMode] = useState(false);
+  const [picked, setPicked] = useState<SelectedElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fileDirty = Boolean(selectedFile && fileDraft !== selectedFile.content);
   const confirmDiscard = () => !fileDirty || window.confirm("Descartar as alterações ainda não salvas?");
   const changeMode = (next: "preview" | "files" | "versions" | "publish") => { if (next === mode || confirmDiscard()) onMode(next); };
   const startMission = () => { if (!confirmDiscard()) return; if (fileDirty && selectedFile) onDraft(selectedFile.content); onStart(); };
