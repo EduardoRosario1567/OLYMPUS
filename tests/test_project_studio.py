@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from olympus.cloud.project_studio import ProjectFileEditor, ProjectRuntimeManager, RuntimeSession
+from olympus.cloud.project_studio import PREVIEW_ISOLATION_MESSAGE, ProjectFileEditor, ProjectRuntimeManager, RuntimeSession
 from olympus.cloud.preview_container import PreviewLifecycleError
 from olympus.cloud.project_versions import ProjectVersionStore
 from olympus.cloud.project_workspace import ProjectWorkspaceManager
@@ -179,8 +179,14 @@ class ProjectRuntimeManagerTests(unittest.TestCase):
         binary.write_text("require('fs').writeFileSync(" + json.dumps(str(marker)) + ", 'executed');", encoding="utf-8")
         original = binary.read_bytes()
         # No subprocess mock: exercise the production start path directly.
-        with self.assertRaisesRegex(RuntimeError, "executor isolado"):
+        # Docker availability changes the failure reason for this intentionally
+        # incomplete app; both paths must preserve the host and original binary.
+        with self.assertRaises(RuntimeError) as blocked:
             self.manager.start("web", "tenant-a")
+        self.assertIn(str(blocked.exception), {
+            PREVIEW_ISOLATION_MESSAGE,
+            "O preview isolado não confirmou uma página HTTP dentro do prazo.",
+        })
         self.assertFalse(marker.exists())
         self.assertEqual(binary.read_bytes(), original)
         self.assertIsNone(self.manager.get("web", "tenant-a"))
