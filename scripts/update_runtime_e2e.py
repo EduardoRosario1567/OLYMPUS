@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import subprocess
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,6 +16,15 @@ from scripts.verify_update_bundle import verify
 
 
 class NativeRuntime(MacRuntime):
+    def call(self,command,cwd=None,timeout=30):
+        result=subprocess.run(command,cwd=cwd,env=self.environment(),stdin=subprocess.DEVNULL,
+                              capture_output=True,timeout=timeout,shell=False)
+        if result.returncode:
+            self.failed_command_output=(result.stdout+result.stderr).decode(errors='replace')[-16000:]
+            self.failed_command_name=Path(command[0]).name
+            raise RuntimeError('Native QA command failed: '+self.failed_command_name)
+        return result.stdout
+
     def preflight(self,source,target):
         if sys.platform!='darwin':raise RuntimeError('Native macOS qualification required')
         self.check_owned(target)
@@ -65,6 +75,8 @@ def main():
             report={'status':'FAIL','source_commit':verified['commit'],'error_type':type(failure).__name__,
                     'reason':str(failure),'boundary':'native-macos-processes-dependencies-http'}
             Path(args.report).write_text(json.dumps(report,indent=2)+'\n')
+            if hasattr(runtime,'failed_command_output'):
+                (Path(args.report).parent/'update-native-command.log').write_text(runtime.failed_command_output)
             for name in ('backend','frontend'):
                 log=target/'.olympus/runtime'/(name+'.log')
                 if log.is_file():
