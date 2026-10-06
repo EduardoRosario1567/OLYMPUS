@@ -307,6 +307,21 @@ apply_update(Path(sys.argv[1]),Path(sys.argv[2]),FixtureRuntime(callback=termina
             apply_update(self.source,self.target,FixtureRuntime())
         self.assert_restored();self.assertEqual((self.target/'start_olympus.command').stat().st_mode&0o777,0o755)
 
+
+    def test_real_npm_offline_uses_distinct_empty_configuration_files(self):
+        import shutil,subprocess
+        if not shutil.which('npm'):self.skipTest('npm unavailable')
+        root=self.root/'synthetic-npm';root.mkdir()
+        package={'name':'synthetic-qa-no-dependencies','version':'1.0.0','private':True}
+        (root/'package.json').write_text(json.dumps(package))
+        (root/'package-lock.json').write_text(json.dumps({'name':package['name'],'version':'1.0.0',
+            'lockfileVersion':3,'packages':{'':package}}))
+        environment=MacRuntime().environment();environment['HOME']=str(root)
+        self.assertNotEqual(environment['npm_config_userconfig'],environment['npm_config_globalconfig'])
+        result=subprocess.run(['npm','ci','--offline','--ignore-scripts','--no-audit','--no-fund'],
+            cwd=root,env=environment,capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_package_builder_refuses_state_and_links(self):
         with self.assertRaises(UpdateError):build(self.source,self.root/'bad.zip',['backend/.env'],'a'*40)
         (self.source/'link.py').symlink_to(self.source/'olympus/example.py')

@@ -167,7 +167,8 @@ class MacRuntime:
         return {'PATH': os.environ.get('PATH', os.defpath), 'HOME': str(Path.home()),
                 'TMPDIR': tempfile.gettempdir(), 'LANG': 'en_US.UTF-8',
                 'PIP_CONFIG_FILE': os.devnull, 'PIP_DISABLE_PIP_VERSION_CHECK': '1',
-                'npm_config_userconfig': os.devnull, 'npm_config_globalconfig': os.devnull,
+                'npm_config_userconfig': os.devnull,
+                'npm_config_globalconfig': str(Path(__file__).resolve().with_name('empty.npmrc')),
                 'NEXT_TELEMETRY_DISABLED': '1'}
 
     def call(self, command, cwd=None, timeout=30):
