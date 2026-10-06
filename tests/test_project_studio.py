@@ -1,7 +1,7 @@
 import io
 import json
-import shutil
 import tempfile
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -116,24 +116,33 @@ class ProjectRuntimeManagerTests(unittest.TestCase):
             self.skipTest("symbolic links unavailable")
         self.assertFalse(self.manager.detect("web", "tenant-a")["ready"])
 
-    def test_starts_recognized_runtime_without_shell_and_reuses_session(self):
+    def test_executable_preview_blocked_in_all_environments_without_bypass(self):
         self.make_package()
         binary = self.root / "node_modules" / "next" / "dist" / "bin" / "next"
         binary.parent.mkdir(parents=True)
-        binary.write_text("", encoding="utf-8")
-        process = FakeProcess()
-        with patch("olympus.cloud.project_studio.shutil.which", return_value="/usr/bin/node"), patch(
-            "olympus.cloud.project_studio.subprocess.Popen", return_value=process
-        ) as popen, patch.object(self.manager, "_listening", return_value=True):
-            first = self.manager.start("web", "tenant-a")
-            second = self.manager.start("web", "tenant-a")
-        self.assertEqual(first.token, second.token)
-        self.assertEqual(first.status, "running")
-        self.assertFalse(popen.call_args.kwargs.get("shell", False))
-        self.assertEqual(popen.call_args.args[0][0], "/usr/bin/node")
-        self.assertEqual(popen.call_args.kwargs["cwd"], str(self.root))
-        environment = popen.call_args.kwargs["env"]
-        self.assertNotIn("OLYMPUS_JWT_SECRET", environment)
+        binary.write_text("throw Error('must not execute')", encoding="utf-8")
+        info = self.manager.detect("web", "tenant-a")
+        self.assertTrue(info["dependencies_ready"])
+        self.assertFalse(info["ready"])
+        self.assertEqual(info["isolation_status"], "unavailable")
+        for environment in ("development", "production", "prod", "test", ""):
+            for override in ("", "1", "true", "yes"):
+                with self.subTest(environment=environment, override=override):
+                    with patch.dict(os.environ, {"OLYMPUS_ENV": environment, "OLYMPUS_ALLOW_UNSANDBOXED_PREVIEW": override}), patch(
+                        "olympus.cloud.project_studio.subprocess.Popen"
+                    ) as popen:
+                        with self.assertRaisesRegex(RuntimeError, "executor isolado"):
+                            self.manager.start("web", "tenant-a")
+                        popen.assert_not_called()
+        self.assertIsNone(self.manager.get("web", "tenant-a"))
+        self.assertEqual(self.manager.logs("web", "tenant-a"), [])
+
+    def test_blocked_runtime_preserves_tenant_access_boundary(self):
+        self.make_package()
+        with patch("olympus.cloud.project_studio.subprocess.Popen") as popen:
+            with self.assertRaises(KeyError):
+                self.manager.start("web", "tenant-b")
+            popen.assert_not_called()
 
     def test_logs_are_bounded_and_secrets_are_redacted(self):
         process = FakeProcess()
@@ -161,29 +170,18 @@ class ProjectRuntimeManagerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.proxy("safe", "../private")
 
-    def test_real_local_runtime_starts_proxies_and_stops_without_dependencies(self):
-        if not shutil.which("node"):
-            self.skipTest("Node.js unavailable")
+    def test_project_javascript_cannot_write_host_marker(self):
         self.make_package()
+        marker = Path(self.temporary.name) / "host-marker"
         binary = self.root / "node_modules" / "next" / "dist" / "bin" / "next"
         binary.parent.mkdir(parents=True)
-        binary.write_text(
-            "const http=require('http');"
-            "const a=process.argv;const i=a.indexOf('--port');const p=Number(a[i+1]);"
-            "http.createServer((q,r)=>{r.setHeader('Content-Type','text/html');"
-            "r.end('<html><body><main id=app>Runtime real</main></body></html>')}).listen(p,'127.0.0.1');",
-            encoding="utf-8",
-        )
-        session = self.manager.start("web", "tenant-a")
-        try:
-            status, headers, body = self.manager.proxy(session.token)
-            self.assertEqual(status, 200)
-            self.assertIn("text/html", headers["Content-Type"])
-            self.assertIn(b"Runtime real", body)
-            self.assertIn(b"olympus-element-selected", body)
-            self.assertTrue(self.manager.get("web", "tenant-a"))
-        finally:
-            self.assertTrue(self.manager.stop("web", "tenant-a"))
+        binary.write_text("require('fs').writeFileSync(" + json.dumps(str(marker)) + ", 'executed');", encoding="utf-8")
+        original = binary.read_bytes()
+        # No subprocess mock: exercise the production start path directly.
+        with self.assertRaisesRegex(RuntimeError, "executor isolado"):
+            self.manager.start("web", "tenant-a")
+        self.assertFalse(marker.exists())
+        self.assertEqual(binary.read_bytes(), original)
         self.assertIsNone(self.manager.get("web", "tenant-a"))
 
 

@@ -1,29 +1,23 @@
 from __future__ import annotations
 
-from collections import deque
+from collections import deque, Counter
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from threading import RLock, Thread
+from threading import RLock, Event, Thread
 from typing import Optional, Union
-import http.client
 import json
 import mimetypes
 import os
 import re
 import secrets
-import shutil
-import socket
 import subprocess
 import tempfile
 import time
-try:
-    import resource
-except ImportError:  # pragma: no cover - Windows has no resource module
-    resource = None
 
 from .project_versions import ProjectVersion, ProjectVersionStore
 from .project_workspace import ProjectWorkspaceManager
+from .preview_container import PreviewContainer, PreviewContainerExecutor, PreviewLifecycleError
 
 
 MAX_EDITOR_FILE_BYTES = 1024 * 1024
@@ -31,6 +25,7 @@ MAX_STUDIO_FILES = 2000
 MAX_RUNTIME_LOG_LINES = 1000
 MAX_ACTIVE_RUNTIMES = 2
 RUNTIME_TTL_SECONDS = 30 * 60
+PREVIEW_ISOLATION_MESSAGE = "Preview executável indisponível: o executor isolado ainda não foi homologado."
 BLOCKED_ROOTS = {
     ".executions", ".git", ".next", ".olympus", "attachments", "imports",
     "node_modules", "dist", "build", "coverage",
@@ -78,6 +73,7 @@ class RuntimeSession:
     expires_at: float
     process: Optional[subprocess.Popen] = None
     error: Optional[str] = None
+    container: Optional[PreviewContainer] = None
 
 
 class ProjectFileEditor:
@@ -200,17 +196,29 @@ class ProjectFileEditor:
             return record, snapshot
 
 
-class ProjectRuntimeManager:
-    """Bounded local web runtimes for previews; never installs dependencies."""
+class PreviewStopError(RuntimeError):
+    pass
 
-    def __init__(self, projects: ProjectWorkspaceManager, ttl_seconds: int = RUNTIME_TTL_SECONDS, max_active: int = MAX_ACTIVE_RUNTIMES) -> None:
+
+class ProjectRuntimeManager:
+    """Owned container previews; no host execution or dependency installation."""
+
+    def __init__(self, projects: ProjectWorkspaceManager, ttl_seconds: int = RUNTIME_TTL_SECONDS, max_active: int = MAX_ACTIVE_RUNTIMES, executor=None, startup_timeout_seconds: float = 20) -> None:
         self.projects = projects
         self.ttl_seconds = max(60, int(ttl_seconds))
         self.max_active = max(1, int(max_active))
+        self.executor = executor if executor is not None else PreviewContainerExecutor()
+        if not 0 < startup_timeout_seconds <= 30:
+            raise ValueError("Invalid preview startup timeout")
+        self.startup_timeout_seconds = startup_timeout_seconds
+        self._reaper_stop = Event()
+        self._reaper = None
         self._sessions: dict[str, RuntimeSession] = {}
         self._project_tokens: dict[tuple[str, str], str] = {}
         self._logs: dict[str, deque[RuntimeLog]] = {}
         self._seq: dict[str, int] = {}
+        self._process_log_cursor = {}
+        self._log_unavailable = set()
         self._lock = RLock()
 
     @staticmethod
@@ -277,56 +285,15 @@ class ProjectRuntimeManager:
             except ValueError:
                 ready = False
         return {
-            "kind": "runtime", "framework": framework, "ready": ready,
-            "message": "Pronto para executar" if ready else "Dependências do projeto ainda não estão disponíveis.",
+            "kind": "runtime", "framework": framework, "ready": False,
+            "dependencies_ready": ready, "isolation_status": "unavailable",
+            "message": PREVIEW_ISOLATION_MESSAGE if ready else "Dependências do projeto ainda não estão disponíveis. " + PREVIEW_ISOLATION_MESSAGE,
             "package_root": str(package_path.parent), "script": script_name,
         }
 
-    @staticmethod
-    def _free_port() -> int:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind(("127.0.0.1", 0))
-            return int(sock.getsockname()[1])
-
-    @staticmethod
-    def _safe_environment(port: int) -> dict[str, str]:
-        allowed = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL", "TMPDIR") if key in os.environ}
-        allowed.update({"NODE_ENV": "development", "NO_COLOR": "1", "HOST": "127.0.0.1", "PORT": str(port)})
-        return allowed
-
-    @staticmethod
-    def _command(framework: str, package_root: str, port: int) -> list[str]:
-        node = shutil.which("node")
-        if not node:
-            raise RuntimeError("Node.js não está disponível neste computador.")
-        modules = Path(package_root) / "node_modules"
-        if framework == "Next.js":
-            return [node, str(modules / "next" / "dist" / "bin" / "next"), "dev", "--hostname", "127.0.0.1", "--port", str(port)]
-        if framework == "Vite":
-            return [node, str(modules / "vite" / "bin" / "vite.js"), "--host", "127.0.0.1", "--port", str(port), "--strictPort"]
-        return [node, str(modules / "react-scripts" / "scripts" / "start.js")]
-
-    @staticmethod
-    def _runtime_limits():
-        """Apply host-level damage limits for the local trusted preview.
-
-        This is not a security sandbox. Production must run previews in a
-        container/VM with a separate user, filesystem and network policy.
-        """
-        if resource is None:
-            return None
-
-        def limit_process():
-            cpu_seconds = max(10, int(os.environ.get("OLYMPUS_PREVIEW_CPU_SECONDS", "120")))
-            memory_bytes = max(512, int(os.environ.get("OLYMPUS_PREVIEW_MEMORY_MB", "2048"))) * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 5))
-            resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
-            resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
-
-        return limit_process
-
     def _append_log(self, token: str, stream: str, message: str) -> None:
-        clean = ANSI_ESCAPE.sub("", message).replace("\x00", "").rstrip()
+        clean = ANSI_ESCAPE.sub("", message)
+        clean = re.sub(r'[\x00-\x08\x0b-\x1f\x7f]', '', clean).rstrip()
         clean = SECRET_LINE.sub(lambda match: "%s=[protegido]" % match.group(1), clean)
         if not clean:
             return
@@ -337,93 +304,73 @@ class ProjectRuntimeManager:
                 RuntimeLog(seq, time.time(), stream, clean[:4000])
             )
 
-    def _read_output(self, token: str, process: subprocess.Popen) -> None:
-        stream = process.stdout
-        if stream is None:
-            return
-        try:
-            for line in iter(stream.readline, ""):
-                self._append_log(token, "runtime", line)
-        finally:
-            stream.close()
-            code = process.poll()
-            with self._lock:
-                session = self._sessions.get(token)
-                if session and session.process is process and code is not None:
-                    session.status = "stopped" if code == 0 else "failed"
-                    if code != 0 and not session.error:
-                        session.error = "O preview executável foi encerrado com erro."
+    def _expire_sessions(self):
+        with self._lock:
+            expired = [(session.project_id, session.tenant_id) for session in self._sessions.values()
+                if session.expires_at <= time.time()]
+            for project_id, tenant_id in expired:
+                self.stop(project_id, tenant_id)
 
-    @staticmethod
-    def _listening(port: int) -> bool:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
-                return True
-        except OSError:
-            return False
+    def _start_reaper(self):
+        if self._reaper is not None:
+            return
+        def reap():
+            while not self._reaper_stop.wait(5):
+                self._expire_sessions()
+        self._reaper = Thread(target=reap, daemon=True)
+        self._reaper.start()
 
     def start(self, project_id: str, tenant_id: str = "local") -> RuntimeSession:
-        production = os.environ.get("OLYMPUS_ENV", "development").strip().lower() in {"production", "prod"}
-        if production and os.environ.get("OLYMPUS_ALLOW_UNSANDBOXED_PREVIEW", "").lower() not in {"1", "true", "yes"}:
-            raise RuntimeError("Preview executável exige sandbox de container em produção.")
         info = self.detect(project_id, tenant_id)
         if info["kind"] != "runtime":
             raise ValueError(info["message"])
-        if not info["ready"]:
-            raise RuntimeError(info["message"])
+        root = self.projects.project_root(project_id, tenant_id=tenant_id)
+        relative = Path(info["package_root"]).relative_to(root.resolve()).as_posix()
         key = (tenant_id, project_id)
         with self._lock:
-            existing_token = self._project_tokens.get(key)
-            existing = self._sessions.get(existing_token or "")
-            if existing and existing.process and existing.process.poll() is None:
+            if self._reaper_stop.is_set():
+                raise RuntimeError("Gerenciador de previews encerrado.")
+            self._expire_sessions()
+            existing = self.get(project_id, tenant_id)
+            if existing and existing.status == "running":
                 existing.expires_at = time.time() + self.ttl_seconds
                 return existing
-            if existing_token:
-                self._sessions.pop(existing_token, None)
-                self._logs.pop(existing_token, None)
-                self._seq.pop(existing_token, None)
-                self._project_tokens.pop(key, None)
-            active = sum(1 for item in self._sessions.values() if item.process and item.process.poll() is None)
-            if active >= self.max_active:
+            if key in self._project_tokens and not self.stop(project_id, tenant_id):
+                raise RuntimeError("A remoção do preview anterior ainda não foi confirmada.")
+            for handle in self.executor.pending():
+                if not self.executor.stop(handle):
+                    raise RuntimeError("Há um container de preview com remoção não confirmada.")
+            if len(self._sessions) >= self.max_active:
                 raise RuntimeError("O limite de previews executáveis simultâneos foi atingido.")
-        port = self._free_port()
-        token = secrets.token_urlsafe(32)
-        command = self._command(info["framework"], info["package_root"], port)
-        process = subprocess.Popen(
-            command,
-            cwd=info["package_root"],
-            env=self._safe_environment(port),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            start_new_session=True,
-            preexec_fn=self._runtime_limits(),
-        )
-        now = time.time()
-        session = RuntimeSession(token, project_id, tenant_id, info["framework"], info["package_root"], port, "starting", now, now + self.ttl_seconds, process)
-        with self._lock:
+            try:
+                handle = self.executor.start(root, info["framework"], relative)
+            except PreviewLifecycleError as exc:
+                raise RuntimeError(PREVIEW_ISOLATION_MESSAGE) from exc
+            now = time.time()
+            token = secrets.token_urlsafe(32)
+            session = RuntimeSession(token, project_id, tenant_id, info["framework"],
+                info["package_root"], 0, "starting", now, now + self.ttl_seconds, container=handle)
             self._sessions[token] = session
             self._project_tokens[key] = token
             self._logs[token] = deque(maxlen=MAX_RUNTIME_LOG_LINES)
             self._seq[token] = 0
-        Thread(target=self._read_output, args=(token, process), daemon=True).start()
-        deadline = time.monotonic() + 12
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                break
-            if self._listening(port):
-                session.status = "running"
-                self._append_log(token, "olympus", "%s iniciado com segurança." % session.framework)
-                return session
-            time.sleep(0.1)
-        session.status = "failed"
-        session.error = "O projeto não iniciou dentro do tempo esperado."
-        self.stop(project_id, tenant_id)
-        raise RuntimeError(session.error)
+            self._start_reaper()
+            try:
+                deadline = time.monotonic() + self.startup_timeout_seconds
+                while time.monotonic() < deadline:
+                    try:
+                        status, headers, _ = self.executor.fetch(handle)
+                        if 200 <= status < 300 and "text/html" in headers.get("Content-Type", "").lower():
+                            session.status = "running"
+                            self._append_log(token, "olympus", "Preview isolado confirmou resposta HTTP.")
+                            return session
+                    except PreviewLifecycleError:
+                        pass
+                    time.sleep(min(0.2, max(0, deadline - time.monotonic())))
+                raise RuntimeError("O preview isolado não confirmou uma página HTTP dentro do prazo.")
+            except BaseException:
+                self.stop(project_id, tenant_id)
+                raise
 
     def get(self, project_id: str, tenant_id: str = "local") -> Optional[RuntimeSession]:
         with self._lock:
@@ -435,60 +382,116 @@ class ProjectRuntimeManager:
                 expired = True
             else:
                 expired = False
+                if session.container and session.status == "running" and not self.executor.running(session.container):
+                    session.status = "failed"
+                    session.error = "O container do preview não está disponível."
                 if session.process and session.process.poll() is not None and session.status in {"starting", "running"}:
                     session.status = "stopped" if session.process.returncode == 0 else "failed"
             result = session
         if expired:
-            self.stop(project_id, tenant_id)
-            return None
+            if self.stop(project_id, tenant_id):
+                return None
+            return session
         return result
 
     def stop(self, project_id: str, tenant_id: str = "local") -> bool:
         key = (tenant_id, project_id)
         with self._lock:
-            token = self._project_tokens.pop(key, None)
-            session = self._sessions.pop(token or "", None)
-            if token:
-                self._logs.pop(token, None)
-                self._seq.pop(token, None)
-        if not session:
-            return False
-        process = session.process
-        if process and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=2)
-        session.status = "stopped"
-        session.expires_at = time.time()
-        if token:
-            with self._lock:
-                self._logs.pop(token, None)
-                self._seq.pop(token, None)
-        return True
+            token = self._project_tokens.get(key)
+            session = self._sessions.get(token or "")
+            if not session:
+                return False
+            if session.container and not self.executor.stop(session.container):
+                session.status = "cleanup_unconfirmed"
+                session.error = "A remoção do container ainda não foi confirmada."
+                session.expires_at = time.time()
+                return False
+            process = session.process
+            if process and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+            session.status = "stopped"
+            session.expires_at = time.time()
+            self._project_tokens.pop(key, None)
+            self._sessions.pop(token, None)
+            self._logs.pop(token, None)
+            self._seq.pop(token, None)
+            self._process_log_cursor.pop(token, None)
+            self._log_unavailable.discard(token)
+            return True
+
+    def stop_checked(self, project_id: str, tenant_id: str = "local") -> bool:
+        with self._lock:
+            if (tenant_id, project_id) not in self._project_tokens:
+                return False
+            if not self.stop(project_id, tenant_id):
+                raise PreviewStopError("A remoção do container de preview ainda não foi confirmada.")
+            return True
 
     def close(self) -> None:
+        self._reaper_stop.set()
         with self._lock:
             projects = [(tenant_id, project_id) for tenant_id, project_id in self._project_tokens]
         for tenant_id, project_id in projects:
             self.stop(project_id, tenant_id)
+        for handle in self.executor.pending():
+            self.executor.stop(handle)
+        if self._reaper is not None:
+            self._reaper.join(timeout=2)
+        self.executor.close()
 
     def logs(self, project_id: str, tenant_id: str = "local", after: int = 0) -> list[RuntimeLog]:
+        # Ownership must be checked even for a missing session, before Docker.
+        self.projects.project_root(project_id, tenant_id=tenant_id)
         session = self.get(project_id, tenant_id)
         if not session:
             return []
         with self._lock:
+            if self._sessions.get(session.token) is not session:
+                return []
+            if session.container and session.status in {'starting', 'running', 'failed'}:
+                try:
+                    entries = self.executor.logs(session.container)
+                    timestamp, previous = self._process_log_cursor.get(session.token, ('', Counter()))
+                    counts = Counter()
+                    newest = timestamp
+                    newest_counts = previous.copy()
+                    for at, stream, message in entries:
+                        if at < timestamp:
+                            continue
+                        key = (stream, message)
+                        counts[(at, key)] += 1
+                        if at > timestamp or counts[(at, key)] > previous[key]:
+                            self._append_log(session.token, stream, message)
+                        if at > newest:
+                            newest = at
+                            newest_counts = Counter()
+                        if at == newest:
+                            newest_counts[key] = max(newest_counts[key], counts[(at, key)])
+                    self._process_log_cursor[session.token] = (newest, newest_counts)
+                    self._log_unavailable.discard(session.token)
+                except PreviewLifecycleError:
+                    if session.token not in self._log_unavailable:
+                        self._append_log(session.token, 'olympus', 'Não foi possível consultar a saída do container nesta leitura.')
+                        self._log_unavailable.add(session.token)
             return [item for item in self._logs.get(session.token, ()) if item.seq > max(0, int(after))]
 
     def resolve(self, token: str) -> RuntimeSession:
         with self._lock:
             session = self._sessions.get(token)
-        if not session or session.expires_at <= time.time() or session.status != "running" or not session.process or session.process.poll() is not None:
-            raise KeyError("runtime session unavailable")
-        session.expires_at = time.time() + self.ttl_seconds
-        return session
+            if not session:
+                raise KeyError("runtime session unavailable")
+            if session.expires_at <= time.time():
+                self.stop(session.project_id, session.tenant_id)
+                raise KeyError("runtime session unavailable")
+            if session.status != "running" or not session.container or not self.executor.running(session.container):
+                raise KeyError("runtime session unavailable")
+            session.expires_at = time.time() + self.ttl_seconds
+            return session
 
     @staticmethod
     def inspector_script() -> str:
@@ -514,28 +517,21 @@ class ProjectRuntimeManager:
         return text.encode("utf-8")
 
     def proxy(self, token: str, asset_path: str = "", query: str = "") -> tuple[int, dict[str, str], bytes]:
-        session = self.resolve(token)
-        relative = PurePosixPath((asset_path or "").lstrip("/"))
         safe_path = "/" + (asset_path or "").lstrip("/")
-        if "\x00" in safe_path or ".." in relative.parts or len(safe_path) > 4096 or len(query) > 4096:
-            raise ValueError("unsafe runtime path")
-        connection = http.client.HTTPConnection("127.0.0.1", session.port, timeout=10)
-        try:
-            target = safe_path + (("?" + query) if query else "")
-            connection.request("GET", target, headers={"Accept": "*/*", "User-Agent": "OLYMPUS-Preview/1.6"})
-            response = connection.getresponse()
-            body = response.read(MAX_EDITOR_FILE_BYTES * 20 + 1)
-            if len(body) > MAX_EDITOR_FILE_BYTES * 20:
-                raise ValueError("runtime response too large")
-            content_type = response.getheader("Content-Type") or mimetypes.guess_type(asset_path)[0] or "application/octet-stream"
-            if any(kind in content_type for kind in ("text/html", "text/css", "javascript")):
-                body = self.rewrite_text(token, content_type, body)
-            headers = {"Content-Type": content_type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
-            location = response.getheader("Location")
-            if location and location.startswith("/") and not location.startswith("//"):
-                headers["Location"] = "/cloud/projects/_runtime/%s%s" % (token, location)
-            elif location and location.startswith("http://127.0.0.1:%s/" % session.port):
-                headers["Location"] = "/cloud/projects/_runtime/%s/%s" % (token, location.split("/", 3)[-1])
-            return response.status, headers, body
-        finally:
-            connection.close()
+        self.executor._request_path(safe_path, query)
+        session = self.resolve(token)
+        status, upstream_headers, body = self.executor.fetch(session.container, safe_path, query)
+        content_type = upstream_headers.get("Content-Type", "application/octet-stream")
+        if any(kind in content_type.lower() for kind in ("text/html", "text/css", "javascript")):
+            body = self.rewrite_text(token, content_type.lower(), body)
+        headers = {"Content-Type": content_type, "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+            "Access-Control-Allow-Origin": "*",
+            "Content-Security-Policy": "sandbox allow-scripts; default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"}
+        location = upstream_headers.get("Location")
+        prefix = "/cloud/projects/_runtime/%s" % token
+        if location and location.startswith("/") and not location.startswith("//"):
+            headers["Location"] = prefix + location
+        elif location and location.startswith("http://127.0.0.1:3000/"):
+            headers["Location"] = prefix + "/" + location.split("/", 3)[-1]
+        return status, headers, body

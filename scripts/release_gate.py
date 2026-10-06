@@ -54,6 +54,8 @@ def run_gate(name: str, command: list[str]) -> dict:
 
 def main() -> int:
     gates = [
+        ("actual-container-isolation", [sys.executable, "scripts/container_isolation_gate.py"]),
+        ("actual-preview-isolation-frameworks", [sys.executable, "scripts/preview_isolation_gate.py"]),
         (
             "unit-and-contract-regression",
             [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],

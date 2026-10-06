@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from olympus.agent.container_execution import ContainerExecutor
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -204,17 +205,14 @@ def run_tests(root, command: Optional[Sequence[str]], timeout: int = TEST_TIMEOU
     if not command:
         return {"ran": False, "returncode": None, "tail": "no runnable python tests found in the workspace"}
     try:
-        with tempfile.TemporaryDirectory(prefix="olympus-acceptance-home-") as home:
-            proc = subprocess.run(
-                list(command), cwd=str(root), env=_scrubbed_env(Path(root), home),
-                capture_output=True, text=True, timeout=timeout, shell=False,
-            )
+        proc = ContainerExecutor().run(root, command, timeout)
     except subprocess.TimeoutExpired:
         return {"ran": True, "returncode": None, "tail": "test run exceeded %ds" % timeout}
     except OSError as exc:
         return {"ran": False, "returncode": None, "tail": "could not start tests: %s" % exc}
     output = ((proc.stdout or "") + (proc.stderr or "")).strip()
-    return {"ran": True, "returncode": proc.returncode, "tail": output[-1500:]}
+    return {"ran": getattr(proc, "execution_started", proc.returncode != 125),
+            "returncode": proc.returncode, "tail": output[-1500:]}
 
 
 class TestsPass(Check):

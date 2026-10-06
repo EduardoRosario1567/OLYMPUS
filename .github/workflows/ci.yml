@@ -7,7 +7,8 @@ on:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -41,9 +42,29 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Provisionar imagens de qualificação em Docker local
+        if: github.event.repository.private == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker --host unix:///var/run/docker.sock version
+          for RUNNER_TAG in python:3.11-slim node:24-bookworm-slim; do
+            docker --host unix:///var/run/docker.sock pull "$RUNNER_TAG"
+          done
+          PYTHON_BASE=$(docker --host unix:///var/run/docker.sock image inspect python:3.11-slim --format '{{index .RepoDigests 0}}')
+          NODE_BASE=$(docker --host unix:///var/run/docker.sock image inspect node:24-bookworm-slim --format '{{index .RepoDigests 0}}')
+          [[ "$PYTHON_BASE" =~ ^python@sha256:[a-f0-9]{64}$ ]]
+          [[ "$NODE_BASE" =~ ^node@sha256:[a-f0-9]{64}$ ]]
+          echo "Bases imutáveis: $PYTHON_BASE $NODE_BASE"
+          docker --host unix:///var/run/docker.sock build --pull=false --build-arg "RUNNER_BASE=$PYTHON_BASE" -t olympus-project-runner:3.0.8-candidate -f containers/project-runner.Dockerfile containers
+          docker --host unix:///var/run/docker.sock build --pull=false --build-arg "NODE_BASE=$NODE_BASE" -t olympus-preview-runner:3.0.8-candidate -f containers/preview-runner.Dockerfile containers
+          docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate --format '{{.Id}}'
+
       - name: Gate de release — missão, failover, checkpoint e entrega
         env:
           OLYMPUS_BROWSER_CHROMIUM_SANDBOX: "0"
+          # Reviewed synthetic QA subprocesses; real Docker gates do not load pytest fixtures.
+          OLYMPUS_QA_TRUSTED_TESTS: "1"
         run: |
           export PYTHONPATH=.:backend
           python3 scripts/release_gate.py

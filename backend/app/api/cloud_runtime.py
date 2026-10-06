@@ -1,3 +1,4 @@
+from olympus.cloud.project_studio import PreviewStopError
 import os
 from pathlib import Path
 import json
@@ -219,7 +220,7 @@ def submit(payload: CloudMissionCreate, identity=Depends(_can_run)):
         PLATFORM.consume(identity.tenant_id, identity.user_id, "missions_month")
         reserved = True
         PLATFORM.record_action(identity.tenant_id, identity.user_id, "mission.requested", "project", payload.project_id, {})
-        _STUDIO_RUNTIMES.stop(payload.project_id, identity.tenant_id)
+        _STUDIO_RUNTIMES.stop_checked(payload.project_id, identity.tenant_id)
         task = _ATTACHMENTS.augment_task(payload.project_id, payload.task, payload.attachment_ids, tenant_id=identity.tenant_id)
         if payload.paid_fallback_authorized and payload.paid_spend_cap_usd <= 0:
             raise ValueError("Defina um limite de gasto para autorizar a continuação paga.")
@@ -251,6 +252,10 @@ def submit(payload: CloudMissionCreate, identity=Depends(_can_run)):
         if reserved:
             PLATFORM.refund(identity.tenant_id, identity.user_id, "missions_month")
         raise HTTPException(status_code=400, detail=str(exc))
+    except PreviewStopError as exc:
+        if reserved:
+            PLATFORM.refund(identity.tenant_id, identity.user_id, "missions_month")
+        raise HTTPException(status_code=409, detail=str(exc))
     except RuntimeError:
         if reserved:
             PLATFORM.refund(identity.tenant_id, identity.user_id, "missions_month")
@@ -393,7 +398,10 @@ def delete_cloud_project(project_id: str, identity=Depends(_can_run)):
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
     if _RUNTIME.project_is_busy(project_id, identity.tenant_id):
         raise HTTPException(status_code=409, detail="O projeto possui uma missão em andamento. Cancele ou aguarde a conclusão antes de excluir.")
-    _STUDIO_RUNTIMES.stop(project_id, identity.tenant_id)
+    try:
+        _STUDIO_RUNTIMES.stop_checked(project_id, identity.tenant_id)
+    except PreviewStopError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     source = archived = None
     try:
         source, archived = _archive_project_workspace(project_id, identity.tenant_id)

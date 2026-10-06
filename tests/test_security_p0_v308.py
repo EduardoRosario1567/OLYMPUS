@@ -94,6 +94,11 @@ class TestSecurityAPI(unittest.TestCase):
         from app.core.tenancy import identity_for
         from app.core.security import emitir_token
         cls.client=TestClient(app);cls.runtime=cloud_runtime;cls.artifacts=artifacts;cls.platform=PLATFORM
+        from app.api import cloud_projects
+        from olympus.cloud.project_studio import ProjectRuntimeManager
+        cls.preview_manager=ProjectRuntimeManager(cloud_runtime._RUNTIME.projects)
+        cls.preview_patches=[patch.object(module, "_STUDIO_RUNTIMES", cls.preview_manager) for module in [cloud_runtime, cloud_projects]]
+        for current in cls.preview_patches:current.start()
         suffix=uuid.uuid4().hex
         cls.owner=identity_for('p0-owner-'+suffix+'@olympus.test');cls.other=identity_for('p0-other-'+suffix+'@olympus.test')
         cls.viewer=identity_for('p0-viewer-'+suffix+'@olympus.test');cls.builder=identity_for('p0-builder-'+suffix+'@olympus.test')
@@ -172,6 +177,29 @@ class TestSecurityAPI(unittest.TestCase):
         self.assertEqual(rejected.status_code,404)
         self.assertNotIn('SYNTHETIC_HIDDEN_MARKER',rejected.text)
 
+    def test_executable_preview_http_refuses_host_execution(self):
+        pid,root=self.project()
+        (root/'package.json').write_text(json.dumps({'scripts':{'dev':'next dev'},'dependencies':{'next':'1'}}))
+        binary=root/'node_modules/next/dist/bin/next'
+        binary.parent.mkdir(parents=True)
+        binary.write_text("throw Error('must not execute')")
+        with patch('olympus.cloud.project_studio.subprocess.Popen') as popen:
+            result=self.client.post('/cloud/projects/'+pid+'/preview-session',headers=self.headers['owner'])
+            self.assertEqual(result.status_code,409,result.text)
+            self.assertIn('executor isolado',result.json()['detail'])
+            self.assertNotIn('preview_url',result.json())
+            popen.assert_not_called()
+        self.assertEqual((root/'marker.txt').read_text(),'SYNTHETIC_PRESERVED')
+
+    def test_executable_preview_http_hides_other_tenant(self):
+        pid,root=self.project()
+        (root/'package.json').write_text(json.dumps({'scripts':{'dev':'vite'},'dependencies':{'vite':'1'}}))
+        with patch('olympus.cloud.project_studio.subprocess.Popen') as popen:
+            result=self.client.post('/cloud/projects/'+pid+'/preview-session',headers=self.headers['other'])
+            self.assertEqual(result.status_code,404,result.text)
+            self.assertNotIn('executor isolado',result.text)
+            popen.assert_not_called()
+
     def test_health_reports_running_security_build(self):
         result=self.client.get('/health');self.assertEqual(result.status_code,200)
         expected=json.loads((Path(__file__).resolve().parents[1]/'frontend/public/olympus-version.json').read_text())
@@ -179,4 +207,6 @@ class TestSecurityAPI(unittest.TestCase):
         self.assertEqual(result.json().get('build'),expected['build'])
 
     @classmethod
-    def tearDownClass(cls):cls.client.close()
+    def tearDownClass(cls):
+        cls.client.close();cls.preview_manager.close()
+        for current in reversed(cls.preview_patches):current.stop()

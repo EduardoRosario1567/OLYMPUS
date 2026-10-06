@@ -8,6 +8,7 @@ from typing import Optional
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 from olympus.agent.output_compactor import compact_output
+from olympus.agent.container_execution import ContainerExecutor
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,8 @@ class TargetedTestRunner:
     Runs only explicitly supplied Python unittest modules.
 
     No shell.
-    Project test modules are executable code. The child receives a minimal
-    environment and a temporary home; this is not an OS sandbox.
+    Project test modules are executable code. Execution requires a local
+    container runtime and an approved image; no host fallback is allowed.
     """
 
     def __init__(self, cwd: Optional[str] = None) -> None:
@@ -125,20 +126,4 @@ class TargetedTestRunner:
             )
 
     def _run(self, command: Tuple[str, ...], timeout_seconds: int):
-        # Never inherit provider keys, JWTs, proxy credentials, custom variables,
-        # or Python startup hooks from the application process.
-        with tempfile.TemporaryDirectory(prefix="olympus-test-home-") as home:
-            env = {
-                "PATH": os.defpath,
-                "HOME": home,
-                "TMPDIR": home,
-                "PYTHONPATH": self.cwd or os.getcwd(),
-                "PYTHONNOUSERSITE": "1",
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONIOENCODING": "utf-8",
-                "LANG": "C.UTF-8",
-            }
-            return subprocess.run(
-                command, capture_output=True, text=True,
-                timeout=timeout_seconds, shell=False, cwd=self.cwd, env=env,
-            )
+        return ContainerExecutor().run(self.cwd or os.getcwd(), command, timeout_seconds)
