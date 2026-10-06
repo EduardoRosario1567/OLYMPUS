@@ -48,14 +48,14 @@ jobs:
         run: |
           set -euo pipefail
           docker --host unix:///var/run/docker.sock version
-          for RUNNER_TAG in python:3.11-slim node:24-bookworm-slim; do
-            docker --host unix:///var/run/docker.sock pull "$RUNNER_TAG"
-          done
-          PYTHON_BASE=$(docker --host unix:///var/run/docker.sock image inspect python:3.11-slim --format '{{index .RepoDigests 0}}')
-          NODE_BASE=$(docker --host unix:///var/run/docker.sock image inspect node:24-bookworm-slim --format '{{index .RepoDigests 0}}')
+          python3 scripts/verify_preview_lock.py containers/preview-runtime.package.json containers/preview-runtime.package-lock.json
+          PYTHON_BASE=$(cat containers/python-base.txt)
+          NODE_BASE=$(cat containers/node-base.txt)
           [[ "$PYTHON_BASE" =~ ^python@sha256:[a-f0-9]{64}$ ]]
           [[ "$NODE_BASE" =~ ^node@sha256:[a-f0-9]{64}$ ]]
           echo "Bases imutáveis: $PYTHON_BASE $NODE_BASE"
+          docker --host unix:///var/run/docker.sock pull "$PYTHON_BASE"
+          docker --host unix:///var/run/docker.sock pull "$NODE_BASE"
           docker --host unix:///var/run/docker.sock build --pull=false --build-arg "RUNNER_BASE=$PYTHON_BASE" -t olympus-project-runner:3.0.8-candidate -f containers/project-runner.Dockerfile containers
           docker --host unix:///var/run/docker.sock build --pull=false --build-arg "NODE_BASE=$NODE_BASE" -t olympus-preview-runner:3.0.8-candidate -f containers/preview-runner.Dockerfile containers
           docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate --format '{{.Id}}'
@@ -75,6 +75,7 @@ jobs:
           name: olympus-runner-provisioning
           path: .olympus/qa/runner-provisioning/
           if-no-files-found: error
+          include-hidden-files: true
 
 
       - name: Gate de release — missão, failover, checkpoint e entrega

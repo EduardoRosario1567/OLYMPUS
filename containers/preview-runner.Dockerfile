@@ -4,7 +4,8 @@ FROM ${NODE_BASE}
 LABEL org.olympus.preview-runner="v1"
 WORKDIR /opt/olympus-preview
 COPY preview-runtime.package.json ./package.json
-RUN npm install --ignore-scripts --no-audit --no-fund \
+COPY preview-runtime.package-lock.json ./package-lock.json
+RUN npm ci --ignore-scripts --no-audit --no-fund \
     && npm ls --depth=0 \
     && node -e "const fs=require('fs'),crypto=require('crypto');console.log('PREVIEW_LOCK_SHA256='+crypto.createHash('sha256').update(fs.readFileSync('package-lock.json')).digest('hex'))"
 COPY preview-launch.mjs ./preview-launch.mjs
