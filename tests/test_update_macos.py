@@ -68,6 +68,19 @@ class MacUpdateTests(unittest.TestCase):
         for name in GENERATED:
             p=self.target/name;p.mkdir(parents=True);(p/'old-marker').write_text('OLD_DEPENDENCY')
 
+    def test_launcher_returns_while_service_descendant_keeps_output_open(self):
+        import signal
+        import time
+        runtime=MacRuntime()
+        started=time.monotonic()
+        output=runtime.call(['bash','-c','sleep 10 & echo $!'],timeout=2)
+        pid=int(output.strip())
+        try:
+            self.assertLess(time.monotonic()-started,2)
+            os.kill(pid,0)
+        finally:
+            os.kill(pid,signal.SIGTERM)
+
     def write_manifest(self):
         (self.source/MANIFEST).write_text(json.dumps(self.source_manifest))
 

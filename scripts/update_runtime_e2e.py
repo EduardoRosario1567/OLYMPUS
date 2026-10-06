@@ -17,13 +17,21 @@ from scripts.verify_update_bundle import verify
 
 class NativeRuntime(MacRuntime):
     def call(self,command,cwd=None,timeout=30):
-        result=subprocess.run(command,cwd=cwd,env=self.environment(),stdin=subprocess.DEVNULL,
-                              capture_output=True,timeout=timeout,shell=False)
-        if result.returncode:
-            self.failed_command_output=(result.stdout+result.stderr).decode(errors='replace')[-16000:]
-            self.failed_command_name=Path(command[0]).name
-            raise RuntimeError('Native QA command failed: '+self.failed_command_name)
-        return result.stdout
+        with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+            try:
+                result=subprocess.run(command,cwd=cwd,env=self.environment(),stdin=subprocess.DEVNULL,
+                                      stdout=output,stderr=errors,timeout=timeout,shell=False)
+            except subprocess.TimeoutExpired:
+                output.seek(0);errors.seek(0)
+                self.failed_command_output=(output.read()+errors.read()).decode(errors='replace')[-16000:]
+                raise
+            output.seek(0);errors.seek(0)
+            stdout=output.read();stderr=errors.read()
+            if result.returncode:
+                self.failed_command_output=(stdout+stderr).decode(errors='replace')[-16000:]
+                self.failed_command_name=Path(command[0]).name
+                raise RuntimeError('Native QA command failed: '+self.failed_command_name)
+            return stdout
 
     def preflight(self,source,target):
         if sys.platform!='darwin':raise RuntimeError('Native macOS qualification required')

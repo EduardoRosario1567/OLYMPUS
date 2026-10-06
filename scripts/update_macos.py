@@ -172,11 +172,15 @@ class MacRuntime:
                 'NEXT_TELEMETRY_DISABLED': '1'}
 
     def call(self, command, cwd=None, timeout=30):
-        result = subprocess.run(command, cwd=cwd, env=self.environment(), stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, shell=False)
-        if result.returncode:
-            raise UpdateError('Comando de preparação ou serviço falhou; saída privada não exibida.')
-        return result.stdout
+        # Detached service descendants may retain shell stdout/stderr. Regular
+        # private files let us wait for the launcher without waiting for pipe EOF.
+        with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+            result = subprocess.run(command, cwd=cwd, env=self.environment(), stdin=subprocess.DEVNULL,
+                                    stdout=output, stderr=errors, timeout=timeout, shell=False)
+            if result.returncode:
+                raise UpdateError('Comando de preparação ou serviço falhou; saída privada não exibida.')
+            output.seek(0)
+            return output.read()
 
     def listeners(self):
         values = []
