@@ -274,6 +274,39 @@ apply_update(Path(sys.argv[1]),Path(sys.argv[2]),FixtureRuntime(callback=termina
             with self.assertRaises(UpdateError):runtime.stop(self.target)
             kill.assert_not_called()
 
+
+    def test_existing_env_template_is_preserved_including_local_values(self):
+        name='backend/.env.example'
+        (self.source/'backend').mkdir()
+        (self.source/name).write_text('SYNTHETIC_DEFAULT_TEMPLATE')
+        (self.target/name).write_text('SYNTHETIC_EXISTING_LOCAL_VALUE')
+        self.source_manifest['files'][name]={'sha256':hashlib.sha256((self.source/name).read_bytes()).hexdigest(),'mode':0o644}
+        self.write_manifest()
+        result=apply_update(self.source,self.target,FixtureRuntime())
+        self.assertEqual(result['status'],'PASS')
+        self.assertEqual((self.target/name).read_text(),'SYNTHETIC_EXISTING_LOCAL_VALUE')
+        self.assert_preserved()
+
+    def test_package_inside_installation_is_rejected(self):
+        import shutil
+        nested=self.target/'nested-package';shutil.copytree(self.source,nested)
+        runtime=FixtureRuntime()
+        with self.assertRaisesRegex(UpdateError,'fora da instalação'):
+            apply_update(nested,self.target,runtime)
+        self.assertEqual(runtime.events,[]);self.assert_restored()
+
+    def test_failed_atomic_write_restores_previous_files_and_modes(self):
+        from scripts.update_macos import atomic
+        failed=[False]
+        (self.target/'start_olympus.command').chmod(0o755)
+        def fail_once(path,content,mode=0o644):
+            if path==self.target/'olympus/example.py' and not failed[0]:
+                failed[0]=True;raise OSError('SYNTHETIC_STORAGE_FAILURE')
+            return atomic(path,content,mode)
+        with patch('scripts.update_macos.atomic',side_effect=fail_once),self.assertRaisesRegex(UpdateError,'restaurados'):
+            apply_update(self.source,self.target,FixtureRuntime())
+        self.assert_restored();self.assertEqual((self.target/'start_olympus.command').stat().st_mode&0o777,0o755)
+
     def test_package_builder_refuses_state_and_links(self):
         with self.assertRaises(UpdateError):build(self.source,self.root/'bad.zip',['backend/.env'],'a'*40)
         (self.source/'link.py').symlink_to(self.source/'olympus/example.py')

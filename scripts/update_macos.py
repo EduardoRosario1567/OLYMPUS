@@ -403,9 +403,13 @@ def apply_update(source, target, runtime):
     if raw_target.is_symlink():
         raise UpdateError('Pasta vinculada não suportada.')
     target = raw_target.resolve()
-    if source == target:
+    if source == target or target in source.parents:
         raise UpdateError('O pacote deve ficar fora da instalação existente.')
     manifest, payload = read_payload(source)
+    # Templates can contain local values; preserve an existing template as data.
+    payload = {name:value for name,value in payload.items()
+               if not (Path(name).name in ('.env.example','.env.local.example')
+                       and guarded(target,name).exists())}
     previous_identity = identity(target)
     for name in payload:
         path = guarded(target, name)
@@ -437,7 +441,7 @@ def apply_update(source, target, runtime):
                 if old[name][0] is not None:
                     atomic(backup/'code'/name, *old[name])
             atomic(backup/'transaction.json', (json.dumps({'status':'PREPARED', 'commit':manifest['commit'],
-                'previous_identity':previous_identity, 'target_files':manifest['files'],
+                'previous_identity':previous_identity, 'target_files':{name:manifest['files'][name] for name in payload},
                 'generated_existed':{name:guarded(target,name).is_dir() for name in GENERATED}, 'files':{n:{'existed':v[0] is not None,'sha256':hashlib.sha256(v[0]).hexdigest() if v[0] is not None else None,'mode':v[1]} for n,v in old.items()}},indent=2)+'\n').encode(), 0o600)
             protected = protected_snapshot(target, set(payload))
             for name, record in protected.items():
@@ -508,6 +512,10 @@ def apply_update(source, target, runtime):
                 path = guarded(target, name)
                 try:
                     current = path.read_bytes() if path.is_file() else None
+                    if current == old[name][0]:
+                        if current is not None:
+                            os.chmod(path,old[name][1])
+                        continue
                     if current != payload[name][0]:
                         raise UpdateError('Código concorrente preservado.')
                     original, mode = old[name]

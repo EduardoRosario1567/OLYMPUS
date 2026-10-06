@@ -17,7 +17,9 @@ Encerra somente processos da instalação nas portas 8000, 3000 e 3001,
 reconferindo PID/porta/CWD antes de TERM. Não encerra o OmniRoute. Mantém
 backup privado de código substituído, dependências anteriores e arquivos
 persistentes. Credenciais, bancos, histórico e projetos não são arquivos de
-payload. Instala Python/frontend novamente e exige healthchecks de versão
+payload. Templates `.env.example` já existentes também são preservados, pois
+podem conter valores locais. O pacote é extraído fora da instalação ativa.
+Instala Python/frontend novamente e exige healthchecks de versão
 **e build** exatos, com backend/frontend nas portas 8000/3000.
 
 Erros de instalação/início/healthcheck revertem código e dependências, desde
