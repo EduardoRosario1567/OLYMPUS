@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from olympus.cloud.project_studio import ProjectFileEditor, ProjectRuntimeManager, RuntimeSession
+from olympus.cloud.preview_container import PreviewLifecycleError
 from olympus.cloud.project_versions import ProjectVersionStore
 from olympus.cloud.project_workspace import ProjectWorkspaceManager
 
@@ -128,7 +129,7 @@ class ProjectRuntimeManagerTests(unittest.TestCase):
         for environment in ("development", "production", "prod", "test", ""):
             for override in ("", "1", "true", "yes"):
                 with self.subTest(environment=environment, override=override):
-                    with patch.dict(os.environ, {"OLYMPUS_ENV": environment, "OLYMPUS_ALLOW_UNSANDBOXED_PREVIEW": override}), patch(
+                    with patch.object(self.manager.executor, "start", side_effect=PreviewLifecycleError("fixture: isolation unavailable")), patch.dict(os.environ, {"OLYMPUS_ENV": environment, "OLYMPUS_ALLOW_UNSANDBOXED_PREVIEW": override}), patch(
                         "olympus.cloud.project_studio.subprocess.Popen"
                     ) as popen:
                         with self.assertRaisesRegex(RuntimeError, "executor isolado"):
