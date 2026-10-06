@@ -207,3 +207,40 @@ jobs:
       - name: Encerrar frontend
         if: always()
         run: kill "$(cat frontend.pid)" 2>/dev/null || true
+
+  macos-update-qualification:
+    if: github.event.repository.private == false
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Atualização e reversão no filesystem macOS
+        run: |
+          python3 -m unittest tests.test_update_macos tests.test_preview_dependency_lock -v
+          bash -n ATUALIZAR-OLYMPUS.command
+      - name: Construir e conferir pacote exato do commit
+        run: |
+          python3 scripts/build_update_bundle.py --output .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip
+          python3 scripts/verify_update_bundle.py .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip > .olympus/qa/update-package-report.json
+          cat .olympus/qa/update-package-report.json
+      - name: Build frontend com dependências recém-instaladas
+        working-directory: frontend
+        run: |
+          printf '%s\n' 'NEXT_PUBLIC_API_BASE_URL=http://localhost:8000' > .env.local
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Preservar candidata e relatório de atualização
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-macos-update-candidate
+          path: |
+            .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip
+            .olympus/qa/update-package-report.json
+          include-hidden-files: true
+          if-no-files-found: error
