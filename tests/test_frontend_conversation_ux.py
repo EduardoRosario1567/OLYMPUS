@@ -70,7 +70,7 @@ class FrontendConversationUXTests(unittest.TestCase):
         ET.parse(ROOT / "frontend/public/olympus-wordmark.svg")
         for relative in ("frontend/components/layout/sidebar.tsx", "frontend/app/missao/page.tsx", "frontend/app/login/page.tsx"):
             source = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("/olympus-mark.png?v=2.6.2", source)
+            self.assertIn("/olympus-mark.png?v=", source)
 
     def test_saas_management_stays_out_of_primary_conversation(self):
         settings = (ROOT / "frontend/app/configuracoes/page.tsx").read_text(encoding="utf-8")

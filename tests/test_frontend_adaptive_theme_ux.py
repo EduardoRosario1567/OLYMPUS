@@ -19,7 +19,7 @@ class FrontendAdaptiveThemeUXTests(unittest.TestCase):
     def test_current_project_and_primary_commands_stay_visible(self):
         mission = (ROOT / "frontend/app/missao/page.tsx").read_text(encoding="utf-8")
 
-        self.assertIn("project-bar sticky top-16", mission)
+        self.assertIn("project-bar sticky top-0", mission)
         self.assertIn("Projeto atual", mission)
         self.assertIn("selectedProject?.name", mission)
         for label in ("Visualizar", "Arquivos", "Versões", "Publicar"):

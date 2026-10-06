@@ -34,7 +34,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#101010] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <span role="img" aria-label="Símbolo de Zeus do Olympus" className="mx-auto block h-20 w-20 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url('/olympus-mark.png?v=2.6.2')" }} />
+          <span role="img" aria-label="Símbolo de Zeus do Olympus" className="mx-auto block h-28 w-28 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: "url('/olympus-mark.png?v=2.6.2')" }} />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-50">Entrar no Olympus</h1>
           <p className="mt-2 text-sm text-zinc-500">Continue de onde parou.</p>
         </div>

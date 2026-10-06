@@ -232,8 +232,8 @@ summary::-webkit-details-marker {
 .olympus-hero-mark {
   position: relative;
   display: grid;
-  width: 76px;
-  height: 76px;
+  width: 100px;
+  height: 100px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 24px;
@@ -367,3 +367,35 @@ summary::-webkit-details-marker {
     height: 64px;
   }
 }
+
+
+/* The application owns two independent scroll regions, including short screens. */
+.app-frame { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
+.app-sidebar { width: 250px; height: 100%; flex-shrink: 0; }
+.app-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.app-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.sidebar-navigation { scrollbar-gutter: stable; }
+.sidebar-surface { color: var(--app-text); }
+.sidebar-surface a, .sidebar-surface button { color: var(--app-text); }
+.sidebar-surface .bg-zinc-100, .sidebar-surface a:hover, .sidebar-surface button:hover { background: color-mix(in srgb, var(--app-text) 7%, var(--app-panel)); }
+.sidebar-surface .bg-white { background: var(--app-panel-raised); }
+.sidebar-surface input { background: var(--app-panel-raised); color: var(--app-text); }
+.navigation-toggle { color: var(--app-text); }
+.navigation-toggle:hover { background: var(--app-panel-raised); }
+.skip-content { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 12px 18px; border-radius: 12px; background: var(--app-text); color: var(--app-bg); transform: translateY(-160%); }
+.skip-content:focus { transform: translateY(0); }
+.app-shell :is(a,button,input,select,textarea):focus-visible { outline: 2px solid #0891b2; outline-offset: 3px; }
+.connections-page { color: var(--app-text); }
+.connection-panel { border: 1px solid var(--app-border); background: var(--app-panel); border-radius: 20px; }
+.connection-muted { color: color-mix(in srgb, var(--app-text) 65%, var(--app-bg)); }
+.connection-toolbar input { background: var(--app-panel); color: var(--app-text); border: 1px solid var(--app-border); }
+.connection-filter { border: 1px solid var(--app-border); background: var(--app-panel); color: var(--app-text); }
+.connection-filter[aria-pressed="true"] { border-color: #0891b2; background: color-mix(in srgb, #0891b2 12%, var(--app-panel)); }
+.provider-card { border: 1px solid var(--app-border); background: var(--app-panel); }
+.provider-card.is-expanded { border-color: #0891b2; }
+.provider-emblem { display: grid; width: 44px; height: 44px; flex-shrink: 0; place-items: center; border: 1px solid var(--app-border); border-radius: 14px; font-weight: 700; color: var(--app-text); background: var(--app-panel-raised); }
+.provider-card .text-zinc-600, .provider-card .text-zinc-700 { color: color-mix(in srgb, var(--app-text) 65%, var(--app-bg)); }
+.connection-policy select, .connection-policy input { background: var(--app-panel-raised); color: var(--app-text); }
+@media (prefers-reduced-motion: reduce) { .app-shell *, .app-shell *::before, .app-shell *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+
+body:has(.app-frame) { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }

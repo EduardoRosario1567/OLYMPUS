@@ -200,6 +200,37 @@ jobs:
       - name: Confirmar página de login carrega (redireciona pra /login)
         run: curl -sfL http://localhost:3000 -o /tmp/home.html && grep -qi "olympus" /tmp/home.html
 
+      - name: Preparar navegador de qualificação
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Interface real — navegação, rolagem e provedores
+        env:
+          OLYMPUS_QA_BROWSER_EVIDENCE: .olympus/qa/ui-evidence
+        run: |
+          mkdir -p .olympus/qa/ui-evidence
+          node tests/frontend_contract.mjs "$GITHUB_WORKSPACE/frontend/node_modules" http://localhost:3000 > .olympus/qa/frontend-shell-browser.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('.olympus/qa/frontend-shell-browser.json').read_text())
+          failures={name:result for name,result in report['checks'].items() if result is not True}
+          assert not failures, json.dumps(failures,ensure_ascii=False)
+          assert not report['page_errors'], report['page_errors']
+          print('Browser workflow checks: PASS',len(report['checks']))
+          PY
+
+      - name: Preservar evidências da interface
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-interface-browser
+          path: |
+            .olympus/qa/frontend-shell-browser.json
+            .olympus/qa/ui-evidence/
+          include-hidden-files: true
+          if-no-files-found: ignore
+
       - name: Logs do frontend (sempre, pra depurar se algo falhar)
         if: always()
         run: cat frontend.log || true

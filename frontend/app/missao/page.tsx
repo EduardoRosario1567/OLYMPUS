@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 20874)
+Total output lines: 889
+
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -468,8 +471,8 @@ export default function MissaoPage() {
   </>;
 
   return <PainelShell>
-    <main className="relative flex min-h-[calc(100vh-4rem)] flex-col md:min-h-screen">
-      <header className="project-bar sticky top-16 z-40 flex min-h-[68px] items-center justify-between gap-3 border-b border-white/[0.06] px-4 backdrop-blur-xl md:top-0 sm:px-6">
+    <main className="relative flex min-h-full flex-col">
+      <header className="project-bar sticky top-0 z-40 flex min-h-[68px] items-center justify-between gap-3 border-b border-white/[0.06] px-4 backdrop-blur-xl md:top-0 sm:px-6">
         <button type="button" onClick={limpar} className="flex min-w-0 items-center gap-3 rounded-xl py-1.5 text-left transition hover:opacity-80">
           <span className="project-icon grid h-9 w-9 shrink-0 place-items-center rounded-xl"><Icon className="h-[18px] w-[18px]"><path d="M4 7h6l2 2h8v10H4z" /><path d="M4 7V5h6l2 2h5" /></Icon></span>
           <span className="min-w-0"><span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-600">Projeto atual</span><span className="block max-w-[260px] truncate text-sm font-semibold text-zinc-100 sm:max-w-[420px]">{selectedProject?.name ?? "Escolha um projeto"}</span></span>
@@ -490,7 +493,7 @@ function EmptyState({ onSelect, composer }: { onSelect: (value: string) => void;
   return <section className="olympus-welcome relative mx-auto flex w-full max-w-4xl flex-1 flex-col items-center overflow-hidden px-4 pb-8 pt-7 text-center sm:px-6 sm:pt-9">
     <div className="olympus-aura" aria-hidden="true" />
     <div className="relative z-10 flex w-full flex-col items-center">
-      <div className="olympus-hero-mark"><OlympusMark className="h-11 w-11" /></div>
+      <div className="olympus-hero-mark"><OlympusMark className="h-16 w-16" /></div>
       <h1 className="mt-4 text-3xl font-semibold tracking-[-0.045em] text-zinc-50 sm:text-[38px] sm:leading-[1.08]">O que vamos construir hoje?</h1>
       <p className="mt-3 flex max-w-xl items-center justify-center gap-2 text-sm leading-6 text-zinc-500"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" />Olympus pronto para planejar, construir e verificar seu projeto.</p>
       <div className="welcome-composer mt-6 w-full max-w-3xl text-left">{composer}</div>
@@ -554,27 +557,7 @@ function formatarTamanho(bytes: number) {
 
 type SelectedElement = { selector: string; tag: string; text: string };
 
-function StudioRail({ task, execution, statusText, events, emAndamento, sending, onTask, onStart }: { task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string) => void; onStart: () => void }) {
-  const visibleEvents = events.map((event) => EVENT_LABELS[event.event]).filter((label): label is string => Boolean(label)).slice(-4);
-  return <aside className="hidden min-h-0 flex-col border-r border-white/[0.07] bg-[#141414] md:flex">
-    <div className="min-h-0 flex-1 overflow-y-auto p-4">
-      <div className="flex items-center gap-3"><OlympusMark className="h-7 w-7" /><div><p className="text-sm font-medium text-zinc-200">Olympus</p><p className="text-[10px] text-zinc-600">Ambiente de construção</p></div></div>
-      <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="text-xs font-medium text-zinc-300">{execution ? statusText : "Pronto para a próxima alteração"}</p>{visibleEvents.length > 0 && <div className="mt-3 space-y-1.5">{visibleEvents.map((label, index) => <p key={`${label}-${index}`} className="text-[11px] text-zinc-600">• {label}</p>)}</div>}</div>
-    </div>
-    <div className="border-t border-white/[0.07] p-3">
-      <textarea aria-label="Alteração do projeto" value={task} onChange={(event) => onTask(event.target.value)} disabled={emAndamento} rows={4} maxLength={4000} placeholder="Peça uma alteração neste projeto" className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#202020] px-3 py-2.5 text-xs leading-5 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/[0.16] disabled:opacity-50" />
-      <button type="button" onClick={onStart} disabled={sending || emAndamento || !task.trim()} className="mt-2 w-full rounded-lg bg-white px-3 py-2 text-xs font-medium text-black hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-500">{emAndamento ? "Olympus trabalhando" : "Enviar ao Olympus"}</button>
-    </div>
-  </aside>;
-}
-
-function WorkspaceOverlay({ projectId, mode, preview, versions, comparison, selectedVersion, files, selectedFile, fileDraft, runtimeLogs, loading, error, notice, task, execution, statusText, events, emAndamento, sending, onTask, onStart, onMode, onClose, onReload, onDownload, onSaveVersion, onCompare, onRestore, onOpenFile, onDraft, onSaveFile, onElement }: { projectId: string; mode: "preview" | "files" | "versions" | "publish"; preview: CloudPreviewSession | null; versions: CloudProjectVersion[]; comparison: CloudVersionComparison | null; selectedVersion: string | null; files: CloudStudioFile[]; selectedFile: CloudStudioFileContent | null; fileDraft: string; runtimeLogs: CloudRuntimeLog[]; loading: boolean; error: string | null; notice: string | null; task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string) => void; onStart: () => void; onMode: (mode: "preview" | "files" | "versions" | "publish") => void; onClose: () => void; onReload: () => void; onDownload: () => void; onSaveVersion: () => void; onCompare: (versionId: string) => void; onRestore: (version: CloudProjectVersion) => void; onOpenFile: (path: string) => void; onDraft: (value: string) => void; onSaveFile: () => void; onElement: (element: SelectedElement) => void }) {
-  const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
-  const [consoleOpen, setConsoleOpen] = useState(false);
-  const [inspectMode, setInspectMode] = useState(false);
-  const [picked, setPicked] = useState<SelectedElement | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const fileDirty = Boolean(selectedFile && fileDraft !== selectedFile.content);
+function StudioRail({ task, execution, statusText, events, emAndamento, sending, onTask, onStart }: { task: string; execution: CloudExecution | null; statusText: string; events: CloudEvent[]; emAndamento: boolean; sending: boolean; onTask: (value: string…874 tokens truncated…& fileDraft !== selectedFile.content);
   const confirmDiscard = () => !fileDirty || window.confirm("Descartar as alterações ainda não salvas?");
   const changeMode = (next: "preview" | "files" | "versions" | "publish") => { if (next === mode || confirmDiscard()) onMode(next); };
   const startMission = () => { if (!confirmDiscard()) return; if (fileDirty && selectedFile) onDraft(selectedFile.content); onStart(); };

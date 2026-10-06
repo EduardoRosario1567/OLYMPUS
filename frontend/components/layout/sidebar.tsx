@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type CloudProject } from "@/services/api";
 import olympusVersion from "@/public/olympus-version.json";
 
@@ -12,12 +12,12 @@ function Icon({ children }: { children?: ReactNode }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">{children}</svg>;
 }
 
-export function Brand({ className = "" }: { className?: string; [key: string]: unknown } = {}) {
-  return <div className={`flex items-center gap-3 ${className}`}>
-    <img src="/olympus-mark.png?v=2.6.2" alt="Olympus" className="olympus-logo h-11 w-11 shrink-0 object-contain" />
-    <div>
-      <div className="text-[15px] font-bold italic tracking-[0.18em]">OLYMPUS</div>
-      <div className="mt-0.5 text-[10px] text-zinc-400">OLYMPUS {olympusVersion.version}</div>
+export function Brand({ className = "", compact = false }: { className?: string; compact?: boolean; [key: string]: unknown } = {}) {
+  return <div className={`olympus-brand flex min-w-0 items-center gap-3 ${className}`}>
+    <img src={`/olympus-mark.png?v=${olympusVersion.version}`} alt="Olympus" className={`olympus-logo shrink-0 object-contain ${compact ? "h-10 w-10" : "h-16 w-16"}`} />
+    <div className="min-w-0">
+      <div className={`${compact ? "text-base" : "text-xl"} font-bold tracking-[0.12em]`}>OLYMPUS</div>
+      <div className="mt-1 text-[11px] text-[var(--app-muted)]">{compact ? olympusVersion.version : `OLYMPUS ${olympusVersion.version}`}</div>
     </div>
   </div>;
 }
@@ -101,19 +101,19 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps = {}) {
     { href: "/conexoes", label: "Inteligência", icon: <Icon><circle cx="8" cy="12" r="3"/><circle cx="17" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="m10.5 10.5 4.5-2.4m-4.5 5.4 4.5 2.4"/></Icon> },
   ];
 
-  return <aside className={`flex h-full min-h-screen w-[250px] flex-col border-r border-black/[0.08] bg-white px-3 py-5 text-zinc-800 ${className}`}>
-    <div className="px-4 pb-5"><Brand /></div>
+  return <aside className={`sidebar-surface flex h-full min-h-0 w-[250px] flex-col border-r px-3 py-5 ${className}`}>
+    <div className="shrink-0 px-2 pb-6"><Brand /></div>
 
-    <nav className="space-y-1">
+    <nav aria-label="Navegação principal" className="sidebar-navigation min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
       <Link href="/missao" onClick={onNavigate} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${pathname === "/missao" && !currentProject ? "bg-zinc-100" : "hover:bg-zinc-50"}`}><Icon><path d="M12 5v14M5 12h14" /></Icon>Nova missão</Link>
 
       <div>
-        <button type="button" onClick={() => setProjectsOpen((value) => !value)} className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-50"><span className="flex items-center gap-3"><Icon><path d="M3 7h7l2 2h9v10H3z"/></Icon>Projetos</span><span className="text-xs text-zinc-400">{projectsOpen ? "⌃" : "⌄"}</span></button>
+        <button type="button" onClick={() => setProjectsOpen((value) => !value)} aria-expanded={projectsOpen} className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-50"><span className="flex items-center gap-3"><Icon><path d="M3 7h7l2 2h9v10H3z"/></Icon>Projetos</span><span className="text-xs text-zinc-400">{projectsOpen ? "⌃" : "⌄"}</span></button>
         {projectsOpen && <div className="ml-3 border-l border-zinc-200 pl-2">
           <button type="button" onClick={() => setCreating((value) => !value)} className="my-1 w-full rounded-lg px-3 py-2 text-left text-xs text-zinc-500 hover:bg-zinc-50">+ Novo projeto</button>
           {creating && <div className="mb-2 px-2"><input aria-label="Nome do projeto" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void createProject(); }} placeholder="Nome do projeto" className="w-full rounded-lg border border-zinc-200 px-2.5 py-2 text-xs outline-none"/><button type="button" onClick={() => void createProject()} disabled={!name.trim() || busy} className="mt-1.5 w-full rounded-lg bg-zinc-900 px-2 py-2 text-xs text-white disabled:opacity-40">{busy ? "Criando…" : "Criar"}</button></div>}
           {projectError && <p role="alert" className="mx-2 mb-2 rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] leading-4 text-rose-600">{projectError}</p>}
-          <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
+          <div className="space-y-0.5">
             {projects.map((project) => <div key={project.project_id} className="relative group/project">
               <div className={`flex items-center rounded-lg ${currentProject === project.project_id ? "bg-zinc-100" : "hover:bg-zinc-50"}`}>
                 <Link href={`/missao?project_id=${encodeURIComponent(project.project_id)}`} onClick={onNavigate} title={`Abrir e continuar ${project.name}`} className={`min-w-0 flex-1 truncate px-3 py-2 text-xs ${currentProject === project.project_id ? "font-medium text-zinc-900" : "text-zinc-500 hover:text-zinc-800"}`}>{project.name}</Link>
@@ -133,7 +133,7 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps = {}) {
       {nav.slice(1).map((item) => <Link key={item.href} href={item.href} onClick={onNavigate} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${pathname === item.href ? "bg-zinc-100" : "hover:bg-zinc-50"}`}>{item.icon}{item.label}</Link>)}
     </nav>
 
-    <div className="mt-auto border-t border-zinc-200 pt-4">
+    <div className="mt-4 shrink-0 border-t border-[var(--app-border)] pt-4">
       <Link href="/configuracoes" onClick={onNavigate} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></Icon>Organização</Link>
       <Link href="/logs" onClick={onNavigate} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><path d="M5 6h14M5 12h10M5 18h7"/></Icon>Detalhes técnicos</Link>
       <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><path d="M10 17l5-5-5-5M15 12H3M21 3v18"/></Icon>Sair</button>
@@ -143,17 +143,34 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps = {}) {
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-  return <div className="md:hidden">
-    <div className="sticky top-0 z-30 flex h-14 items-center border-b border-black/[0.08] bg-white px-4">
-      <button type="button" aria-label="Abrir navegação" onClick={() => setOpen(true)} className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-100">
+  const trigger = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    function keyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") { event.preventDefault(); setOpen(false); return; }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])') ?? []).filter((item) => item.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", keyboard);
+    return () => { document.removeEventListener("keydown", keyboard); (previous ?? trigger.current)?.focus(); };
+  }, [open]);
+  return <div className="mobile-navigation shrink-0 md:hidden">
+    <div className="app-mobile-nav flex h-[72px] items-center gap-3 border-b px-3">
+      <button ref={trigger} type="button" aria-label="Abrir navegação" aria-expanded={open} aria-controls="mobile-sidebar" onClick={() => setOpen(true)} className="navigation-toggle rounded-xl p-3">
         <Icon><path d="M4 7h16M4 12h16M4 17h16" /></Icon>
       </button>
-      <span className="ml-3 text-sm font-bold italic tracking-[0.16em] text-zinc-800">OLYMPUS</span>
-      <span className="ml-2 text-[10px] text-zinc-400">{olympusVersion.version}</span>
+      <Brand compact />
     </div>
-    {open && <div className="fixed inset-0 z-50 flex">
-      <button type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/30" />
-      <div className="relative z-10 h-full bg-white shadow-xl">
+    {open && <div ref={dialog} id="mobile-sidebar" role="dialog" aria-modal="true" aria-label="Navegação OLYMPUS" className="fixed inset-0 z-50 flex">
+      <button type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/50" />
+      <div className="sidebar-surface relative z-10 h-full shadow-xl">
         <Sidebar onNavigate={() => setOpen(false)} />
       </div>
     </div>}
