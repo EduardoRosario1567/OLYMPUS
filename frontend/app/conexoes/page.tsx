@@ -225,7 +225,7 @@ function ProviderCard({ provider, canManage, expanded, onExpand, testing, qualif
     finally { setSavingCredentials(false); }
   }
 
-  return <article className={`provider-card self-start rounded-2xl p-5 transition ${expanded ? "is-expanded" : ""}`}>
+  return <article className={`provider-card self-start rounded-2xl p-5 ${expanded ? "is-expanded" : ""}`}>
     <button type="button" onClick={onExpand} className="w-full text-left" aria-expanded={expanded} aria-controls={`provider-details-${provider.id}`}>
       <div className="flex items-start gap-3"><span aria-hidden="true" className="provider-emblem">{provider.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-medium text-zinc-100">{provider.name}</h3><p className="mt-1 truncate text-[11px] text-zinc-600">{modelText}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${available ? "bg-emerald-500/[0.09] text-emerald-300" : "bg-white/[0.045] text-zinc-500"}`}><span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${available ? "bg-emerald-400" : "bg-zinc-600"}`}/>{!provider.enabled ? "Desativado" : STATUS_LABEL[provider.status] || "Não verificado"}</span></div>
       <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-zinc-500"><span>Fallback: {provider.automatic_active ? "ativo" : "inativo"}</span><span className="text-cyan-300/80">{expanded ? "Fechar" : provider.configured ? "Configurar" : "Configurar agora"} {expanded ? "↑" : "↓"}</span></div>

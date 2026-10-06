@@ -133,7 +133,13 @@ await check('provider_filters_refresh',async()=>{
  catalogFailure=false;await page.getByRole('button',{name:'Atualizar conexões'}).click();await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
  await expect(page.getByText('Fallback automático',{exact:true})).toHaveCount(0);
  const version=JSON.parse(fs.readFileSync(new URL('../frontend/public/olympus-version.json',import.meta.url)));await expect(page.locator('main').getByText('OLYMPUS '+version.version,{exact:true})).toBeVisible();
- if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE){await page.evaluate(()=>document.documentElement.dataset.theme='light');await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/providers-desktop-light.png'});await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/providers-desktop-dark.png'});}
+ for(const theme of ['light','dark']){
+  await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+  assert.ok(await page.locator('.provider-card h3').first().evaluate(el=>{
+   const lum=s=>{const c=document.createElement('canvas');c.width=c.height=1;const ctx=c.getContext('2d');ctx.fillStyle=s;ctx.fillRect(0,0,1,1);const rgb=Array.from(ctx.getImageData(0,0,1,1).data).slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};const a=lum(getComputedStyle(el).color),b=lum(getComputedStyle(el.closest('article')).backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;
+  }),`Provider title contrast in ${theme}`);
+  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+`/providers-desktop-${theme}.png`,animations:'disabled'});
+ }
  providerItems=[fixtureProvider('fcc','Free Claude Code')];
 });
 await check('provider_credentials_permissions',async()=>{
