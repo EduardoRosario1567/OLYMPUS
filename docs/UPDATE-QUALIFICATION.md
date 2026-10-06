@@ -33,7 +33,11 @@ substituídos da instalação ativa, mantendo cópias para recuperação.
 
 A CI macOS executa transações em filesystem real com operações de
 processos/dependências controladas; cria e verifica o ZIP do commit e faz
-build frontend com instalação nova. A CI Linux mantém regressão, E2E e
+build frontend com instalação nova. Também atualiza uma instalação sintética
+com o código anterior qualificado: Python/npm, processos, portas e healthchecks
+são reais. Apenas o provisionamento Docker é separado nesse smoke nativo,
+pois o runner macOS não tem Docker Desktop; o atualizador de produção não
+tem opção para ignorar suas provas de isolamento. A CI Linux mantém regressão, E2E e
 isolamento Docker real. Esses testes não equivalem a uma atualização completa
 na instalação real do usuário: só esse smoke depende das credenciais,
 serviços e dados locais, e não deve ser confundido com a missão Rosales

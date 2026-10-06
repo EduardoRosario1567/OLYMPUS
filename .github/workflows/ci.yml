@@ -211,7 +211,7 @@ jobs:
   macos-update-qualification:
     if: github.event.repository.private == false
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -235,12 +235,22 @@ jobs:
           printf '%s\n' 'NEXT_PUBLIC_API_BASE_URL=http://localhost:8000' > .env.local
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build
+      - uses: actions/checkout@v7
+        with:
+          ref: f31c40591ccf5f850e8599e0d05fd69e3aa595f8
+          path: previous-qualified-source
+      - name: Atualização nativa — dependências, processos e HTTP reais
+        run: |
+          python3 scripts/update_runtime_e2e.py --old-source previous-qualified-source --archive .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip --report .olympus/qa/update-native-report.json
       - name: Preservar candidata e relatório de atualização
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: olympus-macos-update-candidate
           path: |
             .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip
             .olympus/qa/update-package-report.json
+            .olympus/qa/update-native-report.json
+            .olympus/qa/update-native-*.log
           include-hidden-files: true
           if-no-files-found: error
