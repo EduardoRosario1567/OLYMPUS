@@ -135,6 +135,11 @@ def qualify(executor, directory, timeout_seconds=30, probe=actual_probe):
                         any(kind in headers.get('Content-Type','').lower() for kind in ('application/javascript','text/javascript')))
             item['checks']['javascript_asset_ready'] = asset_ready
             logs = executor.logs(handle)
+            if not ready or not asset_ready:
+                # Only synthetic, credential-free fixtures run in this proof.
+                item['framework_logs'] = [
+                    {'stream': stream, 'message': message[:1000]}
+                    for _, stream, message in logs[-8:]]
             item['checks']['stdout_observed'] = any(stream=='stdout' and STDOUT_MARKER in message for _,stream,message in logs)
             item['checks']['stderr_observed'] = any(stream=='stderr' and STDERR_MARKER in message for _,stream,message in logs)
         except PreviewLifecycleError as exc:

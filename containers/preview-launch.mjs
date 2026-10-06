@@ -5,7 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const binaries = {
-  next: ['next/dist/bin/next', 'dev', '--hostname', '127.0.0.1', '--port', '3000'],
+  next: ['next/dist/bin/next', 'dev', '--webpack', '--hostname', '127.0.0.1', '--port', '3000'],
   vite: ['vite/bin/vite.js', '--host', '127.0.0.1', '--port', '3000', '--strictPort'],
   react: ['react-scripts/scripts/start.js'],
 };
