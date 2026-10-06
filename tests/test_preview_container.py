@@ -94,7 +94,7 @@ class PreviewContainerTests(unittest.TestCase):
     def test_launch_restricts_mounts_network_and_privileges(self):
         handle = self.start()
         argv = next(args for _,args in self.docker.calls if args[0]=='create')
-        for flag in ['--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges:true','--pull=never','--user=65534:65534','--memory=512m','--pids-limit=128','--cpus=1']:
+        for flag in ['--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges:true','--pull=never','--user=65534:65534','--memory=1024m','--memory-swap=1024m','--pids-limit=128','--cpus=1']:
             self.assertIn(flag,argv)
         self.assertFalse(any(a.startswith(('-p','--publish','--privileged')) for a in argv if a != '--pull=never' and a != '--pids-limit=128'))
         mount = argv[argv.index('--mount')+1]

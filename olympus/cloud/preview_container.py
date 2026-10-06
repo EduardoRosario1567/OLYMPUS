@@ -165,7 +165,7 @@ class PreviewContainerExecutor:
                 "--label", PREVIEW_ROLE + "=v1", "--label", PREVIEW_OWNER + "=" + handle.name,
                 "--network=none", "--read-only", "--cap-drop=ALL",
                 "--security-opt=no-new-privileges:true", "--user=65534:65534",
-                "--pids-limit=128", "--memory=512m", "--memory-swap=512m", "--cpus=1",
+                "--pids-limit=128", "--memory=1024m", "--memory-swap=1024m", "--cpus=1",
                 "--ulimit=nofile=256:256", "--log-driver=local",
                 "--log-opt=max-size=1m", "--log-opt=max-file=1", "--log-opt=compress=false",
                 "--tmpfs=/tmp:rw,nosuid,nodev,size=67108864,mode=1777",

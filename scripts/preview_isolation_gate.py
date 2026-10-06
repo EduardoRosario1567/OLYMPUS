@@ -136,6 +136,11 @@ def qualify(executor, directory, timeout_seconds=30, probe=actual_probe):
             item['checks']['javascript_asset_ready'] = asset_ready
             logs = executor.logs(handle)
             if not ready or not asset_ready:
+                if probe is actual_probe:
+                    record = executor._inspect(handle)
+                    state = (record or {}).get('State', {})
+                    item['container_state'] = {
+                        key: state.get(key) for key in ('Running', 'OOMKilled', 'ExitCode')}
                 # Only synthetic, credential-free fixtures run in this proof.
                 item['framework_logs'] = [
                     {'stream': stream, 'message': message[:1000]}
