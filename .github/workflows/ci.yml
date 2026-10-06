@@ -59,6 +59,23 @@ jobs:
           docker --host unix:///var/run/docker.sock build --pull=false --build-arg "RUNNER_BASE=$PYTHON_BASE" -t olympus-project-runner:3.0.8-candidate -f containers/project-runner.Dockerfile containers
           docker --host unix:///var/run/docker.sock build --pull=false --build-arg "NODE_BASE=$NODE_BASE" -t olympus-preview-runner:3.0.8-candidate -f containers/preview-runner.Dockerfile containers
           docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate --format '{{.Id}}'
+          mkdir -p .olympus/qa/runner-provisioning
+          printf '%s\n' "$PYTHON_BASE" > .olympus/qa/runner-provisioning/python-base.txt
+          printf '%s\n' "$NODE_BASE" > .olympus/qa/runner-provisioning/node-base.txt
+          docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate > .olympus/qa/runner-provisioning/image-identities.json
+          LOCK_CONTAINER=$(docker --host unix:///var/run/docker.sock create --entrypoint /bin/true olympus-preview-runner:3.0.8-candidate)
+          trap 'docker --host unix:///var/run/docker.sock rm "$LOCK_CONTAINER" >/dev/null' EXIT
+          docker --host unix:///var/run/docker.sock cp "$LOCK_CONTAINER:/opt/olympus-preview/package-lock.json" .olympus/qa/runner-provisioning/preview-runtime.package-lock.json
+          docker --host unix:///var/run/docker.sock cp "$LOCK_CONTAINER:/opt/olympus-preview/package.json" .olympus/qa/runner-provisioning/preview-runtime.package.json
+          sha256sum .olympus/qa/runner-provisioning/* > .olympus/qa/runner-provisioning/SHA256SUMS
+
+      - name: Preservar dependências e identidades das imagens testadas
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-runner-provisioning
+          path: .olympus/qa/runner-provisioning/
+          if-no-files-found: error
+
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         env:
