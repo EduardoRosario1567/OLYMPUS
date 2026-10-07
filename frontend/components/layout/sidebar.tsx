@@ -14,7 +14,7 @@ function Icon({ children }: { children?: ReactNode }) {
 
 export function Brand({ className = "" }: { className?: string; [key: string]: unknown } = {}) {
   return <div className={`flex items-center gap-3 ${className}`}>
-    <img src="/olympus-mark.png?v=2.6.2" alt="Olympus" className="olympus-logo h-11 w-11 shrink-0 object-contain" />
+    <img src={`/olympus-mark.png?v=${olympusVersion.version}`} alt="Olympus" className="olympus-logo h-14 w-14 shrink-0 object-contain" />
     <div>
       <div className="text-[15px] font-bold italic tracking-[0.18em]">OLYMPUS</div>
       <div className="mt-0.5 text-[10px] text-zinc-400">OLYMPUS {olympusVersion.version}</div>
@@ -101,10 +101,10 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps = {}) {
     { href: "/conexoes", label: "Inteligência", icon: <Icon><circle cx="8" cy="12" r="3"/><circle cx="17" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="m10.5 10.5 4.5-2.4m-4.5 5.4 4.5 2.4"/></Icon> },
   ];
 
-  return <aside className={`flex h-full min-h-screen w-[250px] flex-col border-r border-black/[0.08] bg-white px-3 py-5 text-zinc-800 ${className}`}>
+  return <aside className={`flex h-screen min-h-0 w-[268px] flex-col overflow-hidden border-r border-black/[0.08] bg-white px-3 py-5 text-zinc-800 ${className}`}>
     <div className="px-4 pb-5"><Brand /></div>
 
-    <nav className="space-y-1">
+    <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pr-1">
       <Link href="/missao" onClick={onNavigate} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${pathname === "/missao" && !currentProject ? "bg-zinc-100" : "hover:bg-zinc-50"}`}><Icon><path d="M12 5v14M5 12h14" /></Icon>Nova missão</Link>
 
       <div>
@@ -133,7 +133,7 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps = {}) {
       {nav.slice(1).map((item) => <Link key={item.href} href={item.href} onClick={onNavigate} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${pathname === item.href ? "bg-zinc-100" : "hover:bg-zinc-50"}`}>{item.icon}{item.label}</Link>)}
     </nav>
 
-    <div className="mt-auto border-t border-zinc-200 pt-4">
+    <div className="shrink-0 border-t border-zinc-200 pt-4">
       <Link href="/configuracoes" onClick={onNavigate} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></Icon>Organização</Link>
       <Link href="/logs" onClick={onNavigate} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><path d="M5 6h14M5 12h10M5 18h7"/></Icon>Detalhes técnicos</Link>
       <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"><Icon><path d="M10 17l5-5-5-5M15 12H3M21 3v18"/></Icon>Sair</button>

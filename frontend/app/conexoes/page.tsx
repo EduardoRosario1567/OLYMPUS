@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PainelShell } from "@/components/layout/painel-shell";
 import { useRequireAuth } from "@/hooks/useAuth";
+import olympusVersion from "@/public/olympus-version.json";
 import {
   api,
   AIProviderConnection,
@@ -35,6 +36,8 @@ const PROVIDER_KEY_LINKS: Record<string, { label: string; href: string }> = {
   openai: { label: "Obter chave OpenAI", href: "https://platform.openai.com/api-keys" },
   kimi: { label: "Obter chave Kimi", href: "https://platform.moonshot.ai/console/api-keys" },
   opencode_zen: { label: "Obter chave OpenCode Zen", href: "https://opencode.ai/zen" },
+  together: { label: "Obter chave Together AI", href: "https://api.together.ai/settings/api-keys" },
+  fireworks: { label: "Obter chave Fireworks AI", href: "https://app.fireworks.ai/settings/users/api-keys" },
   ollama: { label: "Instalar Ollama", href: "https://ollama.com/download" },
 };
 
@@ -134,9 +137,15 @@ export default function ConexoesPage() {
   return <PainelShell><main className="mx-auto max-w-6xl px-5 py-10 md:px-10">
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-500/70">Central do Olympus</p><h1 className="mt-2 text-2xl font-semibold text-zinc-100">Inteligência</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">Veja rapidamente quais provedores estão disponíveis. Abra apenas o provedor que deseja configurar.</p></div>
-      <div className="flex items-center gap-2"><span className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] text-zinc-500">OLYMPUS 3.0.8</span><span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5 text-xs text-emerald-300"><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"/>Fallback automático</span></div>
+      <div className="flex items-center gap-2"><span className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] text-zinc-500">OLYMPUS {olympusVersion.version}</span><span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5 text-xs text-emerald-300"><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"/>Fallback inteligente</span></div>
     </div>
     {error && <div className="mb-5 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">{error}</div>}
+
+    {catalog && <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.022] p-4"><p className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Provedores</p><p className="mt-2 text-2xl font-semibold text-zinc-100">{catalog.providers.length}</p><p className="mt-1 text-xs text-zinc-600">conexões disponíveis</p></div>
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.022] p-4"><p className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Operacionais</p><p className="mt-2 text-2xl font-semibold text-emerald-300">{catalog.providers.filter((provider) => provider.healthy && provider.enabled).length}</p><p className="mt-1 text-xs text-zinc-600">aptos para teste/uso</p></div>
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.022] p-4"><p className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Fallback</p><p className="mt-2 text-2xl font-semibold text-cyan-300">{catalog.providers.filter((provider) => provider.automatic_active).length}</p><p className="mt-1 text-xs text-zinc-600">rotas automáticas ativas</p></div>
+    </div>}
 
     {catalog && <section className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.022] p-4">
       <div className="flex items-center justify-between gap-4"><div><h2 className="text-sm font-medium text-zinc-200">Política de continuidade</h2><p className="mt-1 text-xs text-zinc-600">{catalog.routing_policy.mode === "free_first" ? "Somente gratuito" : catalog.routing_policy.mode} · {catalog.routing_policy.free_attempt_limit} tentativas gratuitas · pago {catalog.routing_policy.paid_fallback_authorized ? "autorizado" : "desativado"}</p></div><button type="button" onClick={() => setPolicyOpen((value) => !value)} className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-zinc-400">{policyOpen ? "Fechar" : "Configurar"}</button></div>
