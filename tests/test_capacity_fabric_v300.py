@@ -6,6 +6,7 @@ from pathlib import Path
 from olympus.agent.multibrain_registry import AgentModelRoute
 from olympus.routing.capacity_fabric import CapacityAwareRoutingAdapter, CapacityFabric, capacity_filter_routes
 from olympus.routing.interfaces import RoutingExecutionResult
+from olympus.routing.provider_fabric import ProviderRegistry
 
 
 class FakeAdapter:
@@ -175,7 +176,7 @@ def test_sensitive_free_paid_requires_both_ready_agent_and_live_proof(tmp_path, 
     settings = tmp_path / "provider-settings.json"
     capacity = tmp_path / "capacity-fabric.json"
     monkeypatch.setenv("OLYMPUS_PROVIDER_SETTINGS_PATH", str(settings))
-    monkeypatch.setenv("OLYMPUS_CAPACITY_FABRIC_PATH", str(capacity))
+    monkeypatch.setenv("OLYMPUS_CAPACITY_STATE_PATH", str(capacity))
     monkeypatch.setenv("OLLAMA_API_KEY", "active-key")
     runtime.update_provider_preference("ollama_cloud", enabled=True, automatic=True, priority=15)
 
@@ -209,7 +210,7 @@ def test_together_cannot_bypass_proof_gate_with_manual_automatic_flag(tmp_path, 
             return [RoutingModelInfo("model-a", "together", [ModelCapability.CODIGO], True)]
 
     monkeypatch.setenv("OLYMPUS_PROVIDER_SETTINGS_PATH", str(tmp_path / "provider-settings.json"))
-    monkeypatch.setenv("OLYMPUS_CAPACITY_FABRIC_PATH", str(tmp_path / "capacity-fabric.json"))
+    monkeypatch.setenv("OLYMPUS_CAPACITY_STATE_PATH", str(tmp_path / "capacity-fabric.json"))
     monkeypatch.setenv("TOGETHER_API_KEY", "active-key")
     runtime.update_provider_preference("together", enabled=True, automatic=True, priority=15)
 
