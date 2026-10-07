@@ -417,6 +417,40 @@ class AgentLoop:
                 self._report_progress(state)
                 continue
 
+            # A model that keeps reading the same file after the verifier has
+            # already reported a concrete defect is not making progress. Stop
+            # this model attempt early so the control plane can preserve the
+            # workspace and hand the correction to another eligible route.
+            repeated_stalled_read = (
+                bool(state.errors)
+                and bool(files_modified)
+                and len(observations) >= 3
+                and all(
+                    item.success
+                    and item.action.type == ActionType.READ_FILE
+                    and item.action.target == action.target
+                    for item in observations[-3:]
+                )
+            )
+            if repeated_stalled_read:
+                stall_error = (
+                    "stalled_repeated_read: verifier errors remain unresolved; "
+                    "another model must perform a corrective action"
+                )
+                state = state.transition(
+                    AgentStatus.BLOCKED,
+                    errors=tuple(dict.fromkeys(state.errors + (stall_error,))),
+                    metadata=self._metadata(
+                        state,
+                        failure_kind=FailureKind.TECHNICAL.value,
+                        stalled_target=action.target,
+                    ),
+                )
+                history[-1]["failure_kind"] = FailureKind.TECHNICAL.value
+                history[-1]["error"] = stall_error
+                self._report_progress(state)
+                break
+
             repeated_inspection = (
                 action.type == ActionType.INSPECT_RESULT
                 and bool(files_modified)
