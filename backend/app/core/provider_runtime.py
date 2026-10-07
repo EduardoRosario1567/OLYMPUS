@@ -999,6 +999,13 @@ def _agent_compatible_routes(routes):
         if model.endswith(":batch"):
             continue
 
+        # OpenCode Zen may expose free catalog entries whose trial policy only
+        # permits execution from inside the OpenCode client. A real Olympus
+        # mission proved exo-free returns FreeTierError for external API use.
+        # Exclude that route only; other Zen models remain eligible.
+        if route.provider == "opencode_zen" and model == "exo-free":
+            continue
+
         eligible.append(route)
     return tuple(eligible)
 
