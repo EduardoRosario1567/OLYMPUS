@@ -221,12 +221,18 @@ class CapacityFabric:
             provider = provider.lower()
         entry = (data.get("routes") or {}).get(_route_key(provider, route_id), {})
         state_order = {"ready": 0, "candidate": 1, "degraded": 2, "cooldown": 3, "quarantined": 4}
+        ready_agent = bool(
+            entry.get("qualified")
+            and entry.get("qualification_level") == "agent_route_v2"
+        )
         success = int(entry.get("success_count") or 0)
         failure = int(entry.get("failure_count") or 0)
         total = success + failure
         success_rate = success / total if total else 0.5
         latency = float(entry.get("latency_ewma_ms") or 999999.0)
-        return (state_order.get(decision.state, 9), -success_rate, latency)
+        # Agent qualification is stronger evidence than a generic successful
+        # inference. Within the same circuit state, READY_AGENT v2 routes lead.
+        return (state_order.get(decision.state, 9), 0 if ready_agent else 1, -success_rate, latency)
 
     def observe(self, route_id: str, result: RoutingExecutionResult, provider_hint: Optional[str] = None) -> dict:
         provider = str(provider_hint or getattr(result, "provider", "") or "").strip().lower()

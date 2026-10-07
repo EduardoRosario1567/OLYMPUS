@@ -138,3 +138,26 @@ def test_default_free_attempt_budget_is_six_when_no_saved_policy():
                 os.environ.pop("OLYMPUS_PROVIDER_SETTINGS_PATH", None)
             else:
                 os.environ["OLYMPUS_PROVIDER_SETTINGS_PATH"] = previous
+
+
+def test_ready_agent_v2_route_is_preferred_over_generic_ready_route():
+    fabric = CapacityFabric()
+    generic = "groq::generic"
+    agent = "gemini::agent"
+    fabric.observe(generic, result(success=True, status="success", provider="groq", latency=3), provider_hint="groq")
+    fabric.observe(agent, result(success=True, status="success", provider="gemini", latency=40), provider_hint="gemini")
+    for probe in (
+        "response",
+        "action_protocol",
+        "code_action",
+        "patch_action",
+        "repair_after_verifier",
+    ):
+        fabric.record_probe("gemini", agent, probe, True, latency_ms=40)
+
+    routes = (
+        AgentModelRoute(generic, "generic", "groq", 100),
+        AgentModelRoute(agent, "agent", "gemini", 90),
+    )
+    filtered = capacity_filter_routes(routes)
+    assert [route.id for route in filtered] == [agent, generic]
