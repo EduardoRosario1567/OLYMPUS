@@ -1,0 +1,41 @@
+name: Lockfile Security Refresh
+
+on:
+  push:
+    branches: [olympus-3.0.9-rc1]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: olympus-3.0.9-rc1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Refresh vulnerable transitive packages
+        run: npm audit fix --package-lock-only
+      - name: Verify production audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit lockfile if changed
+        working-directory: .
+        run: |
+          if git diff --quiet -- frontend/package-lock.json; then
+            echo "No lockfile changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json
+          git commit -m "CI: refresh vulnerable frontend transitive dependencies"
+          git push origin HEAD:olympus-3.0.9-rc1
