@@ -213,10 +213,10 @@ def capacity_status(_identity=Depends(_can_read)):
 def qualify_provider(provider_id: str, payload: ProviderQualificationRequest, _identity=Depends(_can_manage)):
     """Run bounded, real protocol probes before a model joins trusted routing.
 
-    This first Capacity Fabric qualification level validates connectivity,
-    structured finish actions and structured create_file actions. It does not
-    claim that repository tool execution has been proven; that is a later E2E
-    qualification level.
+    Agent Route v2 validates the minimum behavior required by a coding agent:
+    structured completion, create_file, deterministic patch_file, and a repair
+    action after explicit verifier feedback. Repository execution itself remains
+    covered by the deterministic internal E2E suite.
     """
     from app.core.provider_runtime import _PROVIDER_TIERS
 
@@ -268,6 +268,31 @@ def qualify_provider(provider_id: str, payload: ProviderQualificationRequest, _i
                 'Return only {"type":"create_file","target":"qualification_probe.txt","payload":"OLYMPUS_PROBE_OK","reason":"qualification"}',
                 lambda action: action.type == ActionType.CREATE_FILE and action.target == "qualification_probe.txt" and str(action.payload) == "OLYMPUS_PROBE_OK",
             ),
+            (
+                "patch_action",
+                'A file qualification_probe.txt contains exactly OLYMPUS_PROBE_OLD. Return only one patch_file action for that file using payload {"old_text":"OLYMPUS_PROBE_OLD","new_text":"OLYMPUS_PROBE_OK"}.',
+                lambda action: (
+                    action.type == ActionType.PATCH_FILE
+                    and action.target == "qualification_probe.txt"
+                    and isinstance(action.payload, dict)
+                    and action.payload.get("operation") == "replace_text"
+                    and action.payload.get("old_text") == "OLYMPUS_PROBE_OLD"
+                    and action.payload.get("new_content") == "OLYMPUS_PROBE_OK"
+                ),
+            ),
+            (
+                "repair_after_verifier",
+                'VERIFIER ERROR: deliverable quality: provide a semantic main area with one clear primary heading. Existing app/index.html contains exactly <body><div>Rosales Cafe</div></body>. Return only one patch_file action that replaces that exact text with <body><main><h1>Rosales Cafe</h1></main></body> using old_text/new_text.',
+                lambda action: (
+                    action.type == ActionType.PATCH_FILE
+                    and action.target == "app/index.html"
+                    and isinstance(action.payload, dict)
+                    and action.payload.get("operation") == "replace_text"
+                    and "<body><div>Rosales Cafe</div></body>" == action.payload.get("old_text")
+                    and "<main>" in str(action.payload.get("new_content") or "")
+                    and "<h1>" in str(action.payload.get("new_content") or "")
+                ),
+            ),
         )
         for probe_name, prompt, validator in probes:
             result = adapter.execute(model_id, prompt, max_tokens=512, temperature=0.0)
@@ -291,7 +316,7 @@ def qualify_provider(provider_id: str, payload: ProviderQualificationRequest, _i
 
     return {
         "provider": provider_id,
-        "qualification_level": "agent_action_v1",
+        "qualification_level": "agent_route_v2",
         "models": reports,
         "qualified_count": sum(1 for row in reports if row["qualified"]),
         "capacity": capacity_fabric_snapshot(),

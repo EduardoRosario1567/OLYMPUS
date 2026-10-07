@@ -314,11 +314,17 @@ class CapacityFabric:
             r = routes.setdefault(_route_key(provider, route_id), {"provider": provider, "route_id": route_id})
             probes = r.setdefault("probes", {})
             probes[str(probe)] = {"ok": bool(ok), "at": now, "latency_ms": int(latency_ms or 0), "error": str(error or "")[:1000] or None}
-            required = ("response", "action_protocol", "code_action")
+            required = (
+                "response",
+                "action_protocol",
+                "code_action",
+                "patch_action",
+                "repair_after_verifier",
+            )
             r["qualified"] = all(bool((probes.get(name) or {}).get("ok")) for name in required)
             r["last_probe"] = now
             if r["qualified"]:
-                r["qualification_level"] = "agent_action_v1"
+                r["qualification_level"] = "agent_route_v2"
                 r["quarantined"] = False
                 r["quarantine_reason"] = None
             return dict(r)

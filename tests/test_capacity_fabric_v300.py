@@ -82,14 +82,30 @@ def test_repeated_timeout_only_opens_after_threshold():
     assert not fabric.decision("openrouter::slow", "openrouter").eligible
 
 
-def test_qualification_requires_all_agent_action_probes():
+def test_qualification_requires_all_agent_route_v2_probes():
     fabric = CapacityFabric()
-    for probe in ("response", "action_protocol", "code_action"):
+    probes = (
+        "response",
+        "action_protocol",
+        "code_action",
+        "patch_action",
+        "repair_after_verifier",
+    )
+    for probe in probes[:-1]:
         row = fabric.record_probe("groq", "groq::m", probe, True, latency_ms=10)
+        assert row["qualified"] is False
+    row = fabric.record_probe("groq", "groq::m", probes[-1], True, latency_ms=10)
     assert row["qualified"] is True
     snap = fabric.snapshot()
     route = next(x for x in snap["routes"] if x["route_id"] == "groq::m")
-    assert route["qualification_level"] == "agent_action_v1"
+    assert route["qualification_level"] == "agent_route_v2"
+
+
+def test_old_agent_action_probe_set_does_not_claim_ready_agent():
+    fabric = CapacityFabric()
+    for probe in ("response", "action_protocol", "code_action"):
+        row = fabric.record_probe("groq", "groq::legacy", probe, True, latency_ms=10)
+    assert row["qualified"] is False
 
 
 def test_capacity_adapter_records_execution_automatically():
