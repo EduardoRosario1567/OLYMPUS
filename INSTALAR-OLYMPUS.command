@@ -40,6 +40,14 @@ if [ -d "$TARGET_ROOT" ]; then
   exec "$SOURCE_ROOT/ATUALIZAR-OLYMPUS.command" "$TARGET_ROOT"
 fi
 
+for existing in "$HOME"/Documents/OLYMPUS-PILOTO*; do
+  if [ -f "$existing/frontend/public/olympus-version.json" ]; then
+    echo "ERRO: instalação anterior detectada em $existing."
+    echo "Nenhuma segunda instalação será criada. Use o atualizador cumulativo apontando para essa pasta."
+    exit 1
+  fi
+done
+
 mkdir -p "$(dirname "$TARGET_ROOT")"
 ditto "$SOURCE_ROOT" "$TARGET_ROOT"
 chmod +x \
