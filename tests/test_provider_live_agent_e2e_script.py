@@ -1,4 +1,4 @@
-from scripts.provider_live_agent_e2e import validate_html, choose_models
+from scripts.provider_live_agent_e2e import validate_html, choose_models, QualificationVerifier
 
 
 class Row:
@@ -39,3 +39,36 @@ def test_live_provider_proof_never_invents_requested_model():
     assert "qwen/qwen3.8-27b" in candidates
     assert "openai/gpt-oss-20b" in candidates
     assert "audio-model" not in candidates
+
+
+def test_qualification_verifier_rejects_initial_defective_html(tmp_path):
+    target = tmp_path / "app" / "index.html"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '<!doctype html><html><body><div>OLYMPUS QUALIFICATION</div></body></html>',
+        encoding="utf-8",
+    )
+    verifier = QualificationVerifier(str(tmp_path))
+    errors = verifier.verify_task_deliverable(
+        "Repair the existing app/index.html.",
+        ("app/index.html",),
+    )
+    assert "qualification: missing semantic main" in errors
+    assert "qualification: missing required h1" in errors
+    assert "qualification: missing ready status" in errors
+
+
+def test_qualification_verifier_accepts_exact_contract(tmp_path):
+    target = tmp_path / "app" / "index.html"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '<!doctype html><html><body><main><h1>OLYMPUS QUALIFICATION</h1>'
+        '<p data-status="ready">ok</p></main></body></html>',
+        encoding="utf-8",
+    )
+    verifier = QualificationVerifier(str(tmp_path))
+    errors = verifier.verify_task_deliverable(
+        "Repair the existing app/index.html.",
+        ("app/index.html",),
+    )
+    assert not [e for e in errors if e.startswith("qualification:")]

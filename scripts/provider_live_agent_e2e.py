@@ -26,6 +26,7 @@ from app.core.provider_runtime import build_provider_registry, _rank_live_models
 from olympus.agent.loop import AgentLoop
 from olympus.agent.planner import ModelPlanner
 from olympus.agent.state import AgentState
+from olympus.agent.verifier import AgentVerifier
 
 
 ALLOWED_PROVIDERS = {"together", "ollama_cloud"}
@@ -56,6 +57,21 @@ def validate_html(text: str) -> tuple[bool, list[str]]:
     return not failures, failures
 
 
+class QualificationVerifier(AgentVerifier):
+    """Verifier that makes the live qualification contract authoritative."""
+
+    def verify_task_deliverable(self, task, files_modified, active_skills=()):
+        base = tuple(super().verify_task_deliverable(task, files_modified, active_skills))
+        target = self.root / "app" / "index.html"
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError:
+            return tuple(dict.fromkeys(base + ("qualification: app/index.html is missing",)))
+        valid, failures = validate_html(source)
+        qualification = tuple("qualification: %s" % item for item in failures)
+        return tuple(dict.fromkeys(base + qualification))
+
+
 def choose_models(adapter, requested: str | None) -> list[str]:
     rows = [row.model_id for row in adapter.list_models() if getattr(row, "available", True)]
     if requested:
@@ -82,7 +98,8 @@ def run_one(provider: str, model: str) -> dict:
                 "and data-status=ready are required",
             ),
         )
-        result = AgentLoop(root=str(root), planner=planner).run(
+        verifier = QualificationVerifier(str(root))
+        result = AgentLoop(root=str(root), planner=planner, verifier=verifier).run(
             task=TASK,
             selected_model=model,
             max_iterations=6,
@@ -95,11 +112,12 @@ def run_one(provider: str, model: str) -> dict:
             "model": model,
             "agent_status": result.state.status.value,
             "iterations": result.state.iteration,
+            "history": list(result.history),
             "files_modified": list(result.state.files_modified),
             "valid_deliverable": valid,
             "failures": failures,
             "errors": list(result.state.errors)[-5:],
-            "passed": result.state.status.value == "completed" and valid,
+            "passed": result.state.status.value == "completed" and result.state.iteration >= 1 and valid,
         }
 
 
