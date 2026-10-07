@@ -117,3 +117,9 @@ def test_together_and_fireworks_are_registered_as_opt_in_openai_compatible(tmp_p
     text = path.read_text(encoding="utf-8")
     assert "TOGETHER_API_KEY=together-secret" in text
     assert "FIREWORKS_API_KEY=fireworks-secret" in text
+
+
+def test_cerebras_is_not_presented_as_unconditional_free():
+    catalog = {row[0]: row for row in runtime._DIRECT_PROVIDERS}
+    assert runtime._PROVIDER_TIERS["cerebras"] == "free_paid"
+    assert "cartão/créditos" in catalog["cerebras"][6]

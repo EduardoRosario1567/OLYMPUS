@@ -43,7 +43,7 @@ _DIRECT_PROVIDERS = (
     ("fcc", "Free Claude Code", "OLYMPUS_FCC_URL", "http://127.0.0.1:8082/v1", "FCC_PROXY_TOKEN", 15, "Gateway gratuito e local"),
     ("openrouter", "OpenRouter", "OLYMPUS_OPENROUTER_URL", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", 20, "Nuvem"),
     ("groq", "Groq", "OLYMPUS_GROQ_URL", "https://api.groq.com/openai/v1", "GROQ_API_KEY", 30, "Gratuito"),
-    ("cerebras", "Cerebras", "OLYMPUS_CEREBRAS_URL", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", 40, "Pode exigir créditos"),
+    ("cerebras", "Cerebras", "OLYMPUS_CEREBRAS_URL", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", 40, "Requer ativação e pode exigir cartão/créditos"),
     ("ollama", "Ollama local", "OLYMPUS_OLLAMA_URL", "http://127.0.0.1:11434/v1", None, 50, "Local"),
     ("ollama_cloud", "Ollama Cloud", "OLYMPUS_OLLAMA_CLOUD_URL", "https://ollama.com/v1", "OLLAMA_API_KEY", 55, "Conforme plano"),
     ("openai", "OpenAI", "OLYMPUS_OPENAI_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", 60, "Pago"),
@@ -59,7 +59,7 @@ _DIRECT_PROVIDERS = (
 
 _PROVIDER_TIERS = {
     "omniroute": "free", "fcc": "free", "openrouter": "free", "groq": "free",
-    "cerebras": "free", "ollama": "local", "ollama_cloud": "free_paid", "gemini": "free",
+    "cerebras": "free_paid", "ollama": "local", "ollama_cloud": "free_paid", "gemini": "free",
     "mistral": "free", "zai": "free", "cloudflare": "free",
     "openai": "paid", "kimi": "paid",
     "opencode_zen": "free_paid",
