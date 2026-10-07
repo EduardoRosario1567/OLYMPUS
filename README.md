@@ -1,23 +1,88 @@
-# Olympus 3.0.8 — estabilidade e regressão
+# OLYMPUS — construa conosco uma ferramenta multi-IA
 
-Build STABILITY-REGRESSION-P1. Fonte consolidada com segurança P0, catálogo,
-Superpowers 6.4.2 e conceito de entrega/fontes preservados. Este ajuste corrige
-inicialização da interface, preview local, marca, erro de criação de projeto,
-registro e exibição de exceções, e proteção contra troca de processo no reinício.
+**Aceitamos desenvolvedores interessados em contribuir com a evolução do OLYMPUS.**
+Buscamos pessoas que queiram transformar missões em entregas verificáveis: do
+planejamento à execução, com acompanhamento, recuperação de falhas e evidências.
+Contribuições em código, testes, design, acessibilidade e documentação são bem-vindas.
 
-Leia ../RELATORIO-ESTABILIDADE-OLYMPUS.md. Para atualizar a instalação existente:
-../ATUALIZAR-ESTABILIDADE-OLYMPUS.txt. Copie todo o conteúdo no Terminal.
-A atualização usa as dependências já instaladas, cria backup, verifica o novo
-build e restaura o código anterior se falhar. Não substitui credenciais, bancos,
-projetos, histórico, checkpoints ou preferências.
+[Quero contribuir](CONTRIBUTING.md) · [Desenvolvimento local](docs/community/DEVELOPMENT.md) · [Prioridades](docs/community/ROADMAP.md) · [Reportar problema](https://github.com/EduardoRosario1567/OLYMPUS/issues/new/choose)
 
-Os resultados e o destino das 20 falhas anteriores estão no relatório e em
-../evidencias/. Os testes do navegador usam respostas HTTP sintéticas; não são
-homologação de APIs reais nem de um site criado por IA. Instalação no Mac e
-qualidade visual das entregas ainda exigem validação no ambiente real.
-A01 (isolamento completo do código executado) permanece pendente.
+## O que estamos construindo
 
-Organização: olympus/ núcleo, backend/ APIs, frontend/ interface, tests/
-regressões, scripts/ demonstrações, docs/ registros e vendor/superpowers/
-biblioteca original versionada. O pacote exclui dependências instaladas, caches,
-bancos, credenciais e checkpoints gerados pelos testes.
+O OLYMPUS reúne uma interface Next.js/React, uma API Python/FastAPI e um núcleo
+de decisão para coordenar tarefas com diferentes provedores de IA. O objetivo é
+criar projetos, acompanhar missões e conferir os resultados produzidos.
+
+O código contém adaptadores, integração com OmniRoute e Ollama, histórico,
+retomada e verificadores de entrega. A presença de um adaptador não significa
+que todo modelo esteja disponível, gratuito ou homologado: isso depende da
+versão, da configuração e do provedor.
+
+## Estágio do projeto
+
+**Em desenvolvimento ativo e aberto à colaboração.** A base de `main` consultada
+para esta documentação é a **3.0.8**, build `STABILITY-REGRESSION-P1`.
+Candidatas **3.0.9** estão em branches próprias e devem ser avaliadas pelo commit
+e pelas evidências antes da promoção. Confira a versão em `backend/app/main.py`
+e o workflow de CI do commit escolhido.
+
+Testes controlados, build e missão com provedor real são verificações diferentes.
+Respostas simuladas não representam homologação de uma IA real. Instalação,
+isolamento, roteamento e qualidade das entregas continuam evoluindo; o projeto
+não é anunciado como serviço pronto para uso crítico ou produção multiusuário
+sem avaliação específica.
+
+## Onde você pode ajudar
+
+| Área | Contribuições desejadas |
+| --- | --- |
+| Interface | Acessibilidade, navegação, clareza dos estados e experiência em telas menores |
+| API e núcleo | Contratos, tratamento de erros, separação das camadas e observabilidade |
+| Provedores | Adaptadores documentados, limites, autenticação e failover verificável |
+| Qualidade | Regressões, evidências de navegador e contratos de aceite |
+| Instalação | Atualização reversível, preservação de dados e compatibilidade |
+| Documentação | Guias reproduzíveis, exemplos sem segredos e traduções |
+
+Abra uma issue **Quero contribuir** com sua área de interesse ou escolha uma
+proposta em [Prioridades](docs/community/ROADMAP.md). Não é necessário compartilhar
+e-mail, telefone, chaves de API ou dados pessoais. Também aceitamos contribuições
+em inglês.
+
+## Estrutura
+
+| Diretório | Responsabilidade |
+| --- | --- |
+| `olympus/` | Núcleo de decisão, execução e avaliação; integrações em módulos próprios |
+| `backend/` | API, autenticação e serviços |
+| `frontend/` | Interface Next.js/React |
+| `tests/` | Regressões e contratos |
+| `scripts/` | Instalação, configuração e verificação |
+| `docs/` | Arquitetura, registros técnicos e guias |
+| `vendor/superpowers/` | Dependência versionada com licença própria preservada |
+
+Leia [Arquitetura](docs/community/ARCHITECTURE.md) e [AGENTS.md](AGENTS.md) antes
+de modificar o núcleo. Use um clone separado da instalação pessoal, seguindo
+[DEVELOPMENT.md](docs/community/DEVELOPMENT.md). É possível começar pela
+documentação e pelos testes controlados sem credenciais de provedores.
+Missões reais exigem seus próprios serviços, credenciais e respeito aos custos.
+
+## Revisão das contribuições
+
+Cada pull request deve explicar o problema, o comportamento resultante e a
+validação realizada. Mudanças funcionais precisam de testes pertinentes;
+mudanças visuais precisam de evidências. O mantenedor decide a integração.
+Não há prazo de revisão garantido nem concessão automática de acesso de escrita.
+
+Veja [CONTRIBUTING.md](CONTRIBUTING.md), [Código de conduta](CODE_OF_CONDUCT.md)
+e [Segurança](SECURITY.md).
+
+## Licença
+
+O código próprio do OLYMPUS é disponibilizado sob **AGPL-3.0-only**; veja
+[LICENSE](LICENSE). A política escolhida é manter acessível o código das versões
+modificadas distribuídas ou oferecidas aos usuários como serviço pela rede,
+conforme os termos da licença. Uso comercial continua permitido.
+
+Componentes de terceiros conservam suas licenças e avisos próprios. A licença
+MIT de `vendor/superpowers/` permanece preservada. Ao incluir dependências ou
+recursos novos, verifique a compatibilidade e mantenha os créditos necessários.

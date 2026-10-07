@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Segurança e vulnerabilidades
+    url: https://github.com/EduardoRosario1567/OLYMPUS/blob/main/SECURITY.md
+    about: Consulte a política; não publique detalhes sensíveis em issues.
