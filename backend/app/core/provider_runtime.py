@@ -665,6 +665,19 @@ def _allowed_fallbacks() -> Tuple[str, ...]:
             "OLYMPUS_ENABLE_METERED_PROVIDERS", ""
         ).strip().lower() not in ("1", "true", "yes"):
             continue
+        # Together and Ollama Cloud are never promoted merely because a key is
+        # configured or a generic request succeeded. They must first prove the
+        # full READY_AGENT v2 contract in Capacity Fabric.
+        if provider in ("together", "ollama_cloud"):
+            snapshot = capacity_fabric_snapshot()
+            qualified_routes = [
+                row for row in snapshot.get("routes", ())
+                if row.get("provider") == provider
+                and row.get("qualified")
+                and row.get("qualification_level") == "agent_route_v2"
+            ]
+            if not qualified_routes:
+                continue
         enabled, _priority = _preference(
             provider,
             provider in _LOCAL_PROVIDER_IDS or _provider_credentials_configured(provider),

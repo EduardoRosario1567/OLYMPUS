@@ -462,3 +462,19 @@ class TestProviderFailoverV210(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_together_and_ollama_cloud_require_ready_agent_before_automatic_use(self):
+        from app.core import provider_runtime as runtime
+        from olympus.routing.capacity_fabric import CapacityFabric
+        clean = {
+            "TOGETHER_API_KEY": "active-key",
+            "OLLAMA_API_KEY": "active-key",
+            "OLYMPUS_FREE_FALLBACK_PROVIDERS": "together,ollama_cloud",
+        }
+        with patch.dict(os.environ, clean, clear=False):
+            CapacityFabric().reset(provider="together")
+            CapacityFabric().reset(provider="ollama_cloud")
+            ids = tuple(route.id for route in runtime.configured_free_routes())
+            self.assertFalse(any(route.startswith("together::") for route in ids))
+            self.assertFalse(any(route.startswith("ollama_cloud::") for route in ids))
