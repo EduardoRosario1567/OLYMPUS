@@ -342,7 +342,7 @@ def _route_is_free(provider: str, model_id: str) -> bool:
 @dataclass(frozen=True)
 class RoutingPolicy:
     mode: str = "free_first"
-    free_attempt_limit: int = 6
+    free_attempt_limit: int = 8
     paid_fallback_authorized: bool = False
     paid_attempt_limit: int = 1
     paid_spend_cap_usd: float = 0.0
@@ -479,7 +479,7 @@ def routing_policy(override=None) -> RoutingPolicy:
         mode = "free_first"
     return RoutingPolicy(
         mode=mode,
-        free_attempt_limit=min(8, max(1, int(raw.get("free_attempt_limit", 6)))),
+        free_attempt_limit=min(8, max(1, int(raw.get("free_attempt_limit", 8)))),
         paid_fallback_authorized=bool(raw.get("paid_fallback_authorized", False)),
         paid_attempt_limit=min(3, max(1, int(raw.get("paid_attempt_limit", 1)))),
         paid_spend_cap_usd=max(0.0, min(1000.0, float(raw.get("paid_spend_cap_usd", 0.0)))),
@@ -1027,10 +1027,10 @@ def _agent_compatible_routes(routes):
             continue
 
         # OpenCode Zen may expose free catalog entries whose trial policy only
-        # permits execution from inside the OpenCode client. A real Olympus
-        # mission proved exo-free returns FreeTierError for external API use.
-        # Exclude that route only; other Zen models remain eligible.
-        if route.provider == "opencode_zen" and model == "exo-free":
+        # permits execution from inside the OpenCode client. Real Olympus
+        # missions proved these routes return FreeTierError for external API use.
+        # Exclude only the proven-incompatible routes, never the whole provider.
+        if route.provider == "opencode_zen" and model in {"exo-free", "mimo-v2.6-flash-free"}:
             continue
 
         eligible.append(route)
