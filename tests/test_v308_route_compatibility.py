@@ -15,6 +15,18 @@ BATCH = AgentModelRoute(
     'openrouter',
     750,
 )
+EXO = AgentModelRoute(
+    'opencode_zen::exo-free',
+    'Exo Free',
+    'opencode_zen',
+    740,
+)
+ZEN_NEMOTRON = AgentModelRoute(
+    'opencode_zen::nemotron-3.5-lightning-free',
+    'Nemotron 3.5 Lightning Free',
+    'opencode_zen',
+    730,
+)
 
 
 class RouteCompatibilityTests(unittest.TestCase):
@@ -35,6 +47,12 @@ class RouteCompatibilityTests(unittest.TestCase):
         self.assertEqual(
             self.routes((BATCH, GROQ)),
             (GROQ,),
+        )
+
+    def test_opencode_exo_free_is_excluded_without_disabling_zen(self):
+        self.assertEqual(
+            self.routes((EXO, ZEN_NEMOTRON, GROQ), limit=3),
+            (ZEN_NEMOTRON, GROQ),
         )
 
     def test_general_nemotron_and_dynamic_router_are_kept(self):
