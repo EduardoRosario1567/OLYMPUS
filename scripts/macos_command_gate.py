@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMANDS = ("INSTALAR-OLYMPUS.command", "start_olympus.command", "stop_olympus.command", "configure_ai.command")
+COMMANDS = ("INSTALAR-OLYMPUS.command", "ATUALIZAR-OLYMPUS.command", "start_olympus.command", "stop_olympus.command", "configure_ai.command")
 
 
 def main() -> int:
@@ -31,11 +31,19 @@ def main() -> int:
     installer = (ROOT / "INSTALAR-OLYMPUS.command").read_text(encoding="utf-8")
     starter = (ROOT / "start_olympus.command").read_text(encoding="utf-8")
     stopper = (ROOT / "stop_olympus.command").read_text(encoding="utf-8")
+    updater = (ROOT / "ATUALIZAR-OLYMPUS.command").read_text(encoding="utf-8")
 
     checks.update({
         "installer:macos_guard": 'uname -s' in installer and 'Darwin' in installer,
         "installer:version_from_manifest": "frontend/public/olympus-version.json" in installer,
         "installer:private_target": 'Documents/OLYMPUS-PILOTO' in installer,
+        "installer:cumulative_update": "ATUALIZAR-OLYMPUS.command" in installer,
+        "updater:manifest_identity": "olympus-version.json" in updater and "BUILD=" in updater,
+        "updater:preserves_secrets": 'backend/.env' in updater and 'frontend/.env.local' in updater,
+        "updater:preserves_data": '.olympus/cloud' in updater and '*.db' in updater,
+        "updater:rollback": "rollback()" in updater and "mv \"$ROLLBACK\" \"$TARGET_ROOT\"" in updater,
+        "updater:post_start_smoke": "backend" in updater and "frontend" in updater and "curl -fsS" in updater,
+        "updater:removes_old_after_validation": 'rm -rf "$ROLLBACK"' in updater,
         "starter:loopback_backend": "127.0.0.1 --port 8000" in starter,
         "starter:loopback_frontend": "--hostname 127.0.0.1" in starter,
         "starter:version_healthcheck": "backend_current" in starter and "frontend_current" in starter,
@@ -43,7 +51,7 @@ def main() -> int:
         "starter:omniroute_probe": "127.0.0.1:20128/v1/models" in starter,
         "stopper:pid_files_only": "RUNTIME_DIR" in stopper and "kill \"$pid\"" in stopper,
         "stopper:no_broad_killall": "killall" not in stopper and "pkill" not in stopper,
-        "no_embedded_api_keys": not bool(re.search(r"(?:sk-|AIza|xai-)[A-Za-z0-9_-]{16,}", installer + starter + stopper)),
+        "no_embedded_api_keys": not bool(re.search(r"(?:sk-|AIza|xai-)[A-Za-z0-9_-]{16,}", installer + updater + starter + stopper)),
     })
 
     status = "PASS" if all(checks.values()) else "FAIL"

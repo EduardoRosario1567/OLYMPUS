@@ -35,18 +35,16 @@ if ! node -e 'const [major,minor]=process.versions.node.split(".").map(Number); 
 fi
 
 TARGET_ROOT="$HOME/Documents/OLYMPUS-PILOTO"
-for existing in "$HOME"/Documents/OLYMPUS-PILOTO*; do
-  if [ -f "$existing/frontend/public/olympus-version.json" ] || [ -e "$TARGET_ROOT" ]; then
-    echo "ERRO: uma instalação já existe. Use o atualizador cumulativo com backup e rollback."
-    echo "A instalação existente foi preservada; nenhuma segunda pasta foi criada."
-    exit 1
-  fi
-done
+if [ -d "$TARGET_ROOT" ]; then
+  echo "Instalação existente detectada. Executando atualização cumulativa segura."
+  exec "$SOURCE_ROOT/ATUALIZAR-OLYMPUS.command" "$TARGET_ROOT"
+fi
 
 mkdir -p "$(dirname "$TARGET_ROOT")"
 ditto "$SOURCE_ROOT" "$TARGET_ROOT"
 chmod +x \
   "$TARGET_ROOT/INSTALAR-OLYMPUS.command" \
+  "$TARGET_ROOT/ATUALIZAR-OLYMPUS.command" \
   "$TARGET_ROOT/start_olympus.command" \
   "$TARGET_ROOT/stop_olympus.command" \
   "$TARGET_ROOT/configure_ai.command"
