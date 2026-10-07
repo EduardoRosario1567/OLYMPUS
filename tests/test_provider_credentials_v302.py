@@ -90,3 +90,30 @@ def test_cloudflare_adapter_parses_openrouter_catalog_shape(monkeypatch):
     health = adapter.health()
     assert health.healthy is True
     assert health.metadata["models_count"] == 2
+
+
+def test_together_and_fireworks_are_registered_as_opt_in_openai_compatible(tmp_path, monkeypatch):
+    path = _isolated_credentials(tmp_path, monkeypatch)
+    monkeypatch.delenv("TOGETHER_API_KEY", raising=False)
+    monkeypatch.delenv("FIREWORKS_API_KEY", raising=False)
+
+    assert runtime.provider_credential_fields("together")[0]["configured"] is False
+    assert runtime.provider_credential_fields("fireworks")[0]["configured"] is False
+
+    runtime.update_provider_secret("together", "together-secret")
+    runtime.update_provider_secret("fireworks", "fireworks-secret")
+
+    registry = runtime.build_provider_registry(timeout_seconds=5)
+    together = registry.adapter("together")
+    fireworks = registry.adapter("fireworks")
+
+    assert together.config.base_url == "https://api.together.ai/v1"
+    assert fireworks.config.base_url == "https://api.fireworks.ai/inference/v1"
+    assert together.config.enabled is True
+    assert fireworks.config.enabled is True
+    assert runtime._PROVIDER_TIERS["together"] == "free_paid"
+    assert runtime._PROVIDER_TIERS["fireworks"] == "free_paid"
+
+    text = path.read_text(encoding="utf-8")
+    assert "TOGETHER_API_KEY=together-secret" in text
+    assert "FIREWORKS_API_KEY=fireworks-secret" in text

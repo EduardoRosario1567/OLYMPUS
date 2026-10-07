@@ -53,6 +53,8 @@ _DIRECT_PROVIDERS = (
     ("cloudflare", "Cloudflare Workers AI", "OLYMPUS_CLOUDFLARE_URL", "", "CLOUDFLARE_API_KEY", 100, "Franquia gratuita"),
     ("kimi", "Kimi", "OLYMPUS_KIMI_URL", "https://api.moonshot.ai/v1", "KIMI_API_KEY", 110, "Pago opcional"),
     ("opencode_zen", "OpenCode Zen", "OLYMPUS_OPENCODE_ZEN_URL", "https://opencode.ai/zen/v1", "OPENCODE_API_KEY", 120, "Modelos gratuitos e pagos"),
+    ("together", "Together AI", "OLYMPUS_TOGETHER_URL", "https://api.together.ai/v1", "TOGETHER_API_KEY", 130, "Conforme plano"),
+    ("fireworks", "Fireworks AI", "OLYMPUS_FIREWORKS_URL", "https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY", 140, "Conforme plano"),
 )
 
 _PROVIDER_TIERS = {
@@ -61,6 +63,7 @@ _PROVIDER_TIERS = {
     "mistral": "free", "zai": "free", "cloudflare": "free",
     "openai": "paid", "kimi": "paid",
     "opencode_zen": "free_paid",
+    "together": "free_paid", "fireworks": "free_paid",
 }
 
 _PROVIDER_LABELS = {"omniroute": "OmniRoute"}
