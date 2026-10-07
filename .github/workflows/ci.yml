@@ -168,3 +168,52 @@ jobs:
       - name: Encerrar frontend
         if: always()
         run: kill "$(cat frontend.pid)" 2>/dev/null || true
+
+
+  package:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verificar identidade do pacote
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("frontend/public/olympus-version.json").read_text())
+          assert data["product"] == "olympus"
+          assert data["version"] == "3.0.9"
+          assert data["build"] == "DELIVERY-QUALITY-RC2"
+          print(data)
+          PY
+
+      - name: Montar ZIP limpo
+        run: |
+          rm -rf /tmp/olympus-package
+          mkdir -p /tmp/olympus-package/OLYMPUS-3.0.9
+          rsync -a ./ /tmp/olympus-package/OLYMPUS-3.0.9/ \
+            --exclude '.git/' \
+            --exclude '.venv/' \
+            --exclude '.olympus/' \
+            --exclude 'frontend/node_modules/' \
+            --exclude 'frontend/.next/' \
+            --exclude 'backend/.env' \
+            --exclude 'frontend/.env.local' \
+            --exclude '*.db' \
+            --exclude '__pycache__/' \
+            --exclude '.pytest_cache/'
+          chmod +x /tmp/olympus-package/OLYMPUS-3.0.9/*.command
+          cd /tmp/olympus-package
+          zip -qr "$GITHUB_WORKSPACE/OLYMPUS-3.0.9-FINAL.zip" OLYMPUS-3.0.9
+          cd "$GITHUB_WORKSPACE"
+          sha256sum OLYMPUS-3.0.9-FINAL.zip | tee OLYMPUS-3.0.9-FINAL.sha256
+
+      - name: Publicar pacote final
+        uses: actions/upload-artifact@v6
+        with:
+          name: OLYMPUS-3.0.9-FINAL
+          path: |
+            OLYMPUS-3.0.9-FINAL.zip
+            OLYMPUS-3.0.9-FINAL.sha256
+          if-no-files-found: error
