@@ -647,6 +647,23 @@ def provider_catalog(timeout_seconds: float = 2) -> dict:
     }
 
 
+def _trusted_live_agent_routes(provider_id: str) -> Tuple[str, ...]:
+    """Routes proven by READY_AGENT v2 and an isolated real AgentLoop mission."""
+    provider = str(provider_id or "").strip().lower()
+    trusted = []
+    for row in capacity_fabric_snapshot().get("routes", ()):
+        if (
+            row.get("provider") == provider
+            and row.get("qualified")
+            and row.get("qualification_level") == "agent_route_v2"
+            and row.get("live_agent_proof") is True
+        ):
+            route_id = str(row.get("route_id") or "").strip()
+            if route_id:
+                trusted.append(route_id)
+    return tuple(dict.fromkeys(trusted))
+
+
 def _allowed_fallbacks() -> Tuple[str, ...]:
     # Cerebras is kept as an opt-in integration because a healthy key may
     # still have no inference quota. Default zero-cost routing uses Groq only.
@@ -665,19 +682,10 @@ def _allowed_fallbacks() -> Tuple[str, ...]:
             "OLYMPUS_ENABLE_METERED_PROVIDERS", ""
         ).strip().lower() not in ("1", "true", "yes"):
             continue
-        # Together and Ollama Cloud are never promoted merely because a key is
-        # configured or a generic request succeeded. They must first prove the
-        # full READY_AGENT v2 contract in Capacity Fabric.
-        if provider in ("together", "ollama_cloud"):
-            snapshot = capacity_fabric_snapshot()
-            qualified_routes = [
-                row for row in snapshot.get("routes", ())
-                if row.get("provider") == provider
-                and row.get("qualified")
-                and row.get("qualification_level") == "agent_route_v2"
-            ]
-            if not qualified_routes:
-                continue
+        # Sensitive free-paid routes require both READY_AGENT v2 and an isolated
+        # real AgentLoop proof before automatic use.
+        if provider in ("together", "ollama_cloud") and not _trusted_live_agent_routes(provider):
+            continue
         enabled, _priority = _preference(
             provider,
             provider in _LOCAL_PROVIDER_IDS or _provider_credentials_configured(provider),
@@ -874,8 +882,11 @@ def configured_free_routes(registry=None) -> Tuple[AgentModelRoute, ...]:
         if _PROVIDER_TIERS.get(provider_id) != "free_paid":
             continue
         automatic = preferences.get(provider_id, {}).get("automatic")
-        if automatic is True and _provider_credentials_configured(provider_id):
-            ordered_providers.append((_preference(provider_id, True, 300)[1], provider_id))
+        if automatic is not True or not _provider_credentials_configured(provider_id):
+            continue
+        if provider_id in ("together", "ollama_cloud") and not _trusted_live_agent_routes(provider_id):
+            continue
+        ordered_providers.append((_preference(provider_id, True, 300)[1], provider_id))
     ordered_providers.sort(key=lambda item: (item[0], item[1]))
 
     # The Central uses smaller numbers as earlier attempts, while the legacy

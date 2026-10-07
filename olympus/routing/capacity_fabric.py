@@ -337,6 +337,29 @@ class CapacityFabric:
 
         return self._mutate(apply)
 
+    def record_live_agent_proof(self, provider: str, route_id: str, ok: bool, *, details: Optional[dict] = None) -> dict:
+        """Persist an isolated real AgentLoop proof for one provider route."""
+        provider = str(provider or "").strip().lower()
+        route_id = str(route_id or "").strip()
+        now = _now()
+
+        def apply(data):
+            routes = data.setdefault("routes", {})
+            r = routes.setdefault(_route_key(provider, route_id), {
+                "provider": provider,
+                "route_id": route_id,
+            })
+            r["live_agent_proof"] = bool(ok)
+            r["live_agent_proof_at"] = now
+            safe = {}
+            for key, value in dict(details or {}).items():
+                if key in ("agent_status", "iterations", "valid_deliverable", "model"):
+                    safe[key] = value
+            r["live_agent_proof_details"] = safe
+            return dict(r)
+
+        return self._mutate(apply)
+
     def quarantine(self, provider: str, route_id: str, reason: str) -> None:
         provider = str(provider or "").strip().lower()
         route_id = str(route_id or "").strip()

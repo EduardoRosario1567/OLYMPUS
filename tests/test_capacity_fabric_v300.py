@@ -161,3 +161,59 @@ def test_ready_agent_v2_route_is_preferred_over_generic_ready_route():
     )
     filtered = capacity_filter_routes(routes)
     assert [route.id for route in filtered] == [agent, generic]
+
+
+def test_sensitive_free_paid_requires_both_ready_agent_and_live_proof(tmp_path, monkeypatch):
+    from app.core import provider_runtime as runtime
+    from olympus.routing.capacity_fabric import CapacityFabric
+    from olympus.routing.interfaces import RoutingModelInfo, ModelCapability
+
+    class LiveOllamaCloud:
+        def list_models(self):
+            return [RoutingModelInfo("gpt-oss:120b", "ollama_cloud", [ModelCapability.CODIGO], True)]
+
+    settings = tmp_path / "provider-settings.json"
+    capacity = tmp_path / "capacity-fabric.json"
+    monkeypatch.setenv("OLYMPUS_PROVIDER_SETTINGS_PATH", str(settings))
+    monkeypatch.setenv("OLYMPUS_CAPACITY_FABRIC_PATH", str(capacity))
+    monkeypatch.setenv("OLLAMA_API_KEY", "active-key")
+    runtime.update_provider_preference("ollama_cloud", enabled=True, automatic=True, priority=15)
+
+    registry = ProviderRegistry()
+    registry.register("ollama_cloud", LiveOllamaCloud(), 15)
+    route_id = "ollama_cloud::gpt-oss:120b"
+    fabric = CapacityFabric()
+
+    ids = tuple(route.id for route in runtime.configured_free_routes(registry))
+    assert route_id not in ids
+
+    for probe in ("response", "action_protocol", "code_action", "patch_action", "repair_after_verifier"):
+        fabric.record_probe("ollama_cloud", route_id, probe, True, latency_ms=10)
+    ids = tuple(route.id for route in runtime.configured_free_routes(registry))
+    assert route_id not in ids
+
+    fabric.record_live_agent_proof(
+        "ollama_cloud", route_id, True,
+        details={"model": "gpt-oss:120b", "agent_status": "completed", "iterations": 3, "valid_deliverable": True},
+    )
+    ids = tuple(route.id for route in runtime.configured_free_routes(registry))
+    assert route_id in ids
+
+
+def test_together_cannot_bypass_proof_gate_with_manual_automatic_flag(tmp_path, monkeypatch):
+    from app.core import provider_runtime as runtime
+    from olympus.routing.interfaces import RoutingModelInfo, ModelCapability
+
+    class LiveTogether:
+        def list_models(self):
+            return [RoutingModelInfo("model-a", "together", [ModelCapability.CODIGO], True)]
+
+    monkeypatch.setenv("OLYMPUS_PROVIDER_SETTINGS_PATH", str(tmp_path / "provider-settings.json"))
+    monkeypatch.setenv("OLYMPUS_CAPACITY_FABRIC_PATH", str(tmp_path / "capacity-fabric.json"))
+    monkeypatch.setenv("TOGETHER_API_KEY", "active-key")
+    runtime.update_provider_preference("together", enabled=True, automatic=True, priority=15)
+
+    registry = ProviderRegistry()
+    registry.register("together", LiveTogether(), 15)
+    ids = tuple(route.id for route in runtime.configured_free_routes(registry))
+    assert "together::model-a" not in ids

@@ -23,10 +23,14 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / "backend" / ".env", override=False)
 
 from app.core.provider_runtime import build_provider_registry, _rank_live_models
+from olympus.agent.action_normalizer import normalize_action_text
+from olympus.agent.actions import ActionType
 from olympus.agent.loop import AgentLoop
 from olympus.agent.planner import ModelPlanner
 from olympus.agent.state import AgentState
 from olympus.agent.verifier import AgentVerifier
+from olympus.routing.capacity_fabric import CapacityFabric
+from olympus.routing.provider_fabric import provider_route_id
 
 
 ALLOWED_PROVIDERS = {"together", "ollama_cloud"}
@@ -77,6 +81,58 @@ def choose_models(adapter, requested: str | None) -> list[str]:
     if requested:
         return [requested] if requested in rows else []
     return list(_rank_live_models(tuple(rows)))[:3]
+
+
+def qualify_ready_agent(provider: str, model: str, adapter) -> dict:
+    route_id = provider_route_id(provider, model)
+    fabric = CapacityFabric()
+    probes = (
+        ("response",
+         '{"type":"finish","target":null,"payload":null,"reason":"OLYMPUS_PROBE_OK"}',
+         lambda action: action.type == ActionType.FINISH and action.target is None),
+        ("action_protocol",
+         '{"type":"finish","target":null,"payload":null,"reason":"structured action protocol ok"}',
+         lambda action: action.type == ActionType.FINISH and action.target is None),
+        ("code_action",
+         '{"type":"create_file","target":"qualification_probe.txt","payload":"OLYMPUS_PROBE_OK","reason":"qualification"}',
+         lambda action: action.type == ActionType.CREATE_FILE and action.target == "qualification_probe.txt"
+         and str(action.payload) == "OLYMPUS_PROBE_OK"),
+        ("patch_action",
+         'A file qualification_probe.txt contains exactly OLYMPUS_PROBE_OLD. Return only one patch_file action for that file using payload {"old_text":"OLYMPUS_PROBE_OLD","new_text":"OLYMPUS_PROBE_OK"}.',
+         lambda action: action.type == ActionType.PATCH_FILE and action.target == "qualification_probe.txt"
+         and isinstance(action.payload, dict)
+         and action.payload.get("operation") == "replace_text"
+         and action.payload.get("old_text") == "OLYMPUS_PROBE_OLD"
+         and action.payload.get("new_content") == "OLYMPUS_PROBE_OK"),
+        ("repair_after_verifier",
+         'VERIFIER ERROR: deliverable quality: provide a semantic main area with one clear primary heading. Existing app/index.html contains exactly <body><div>Rosales Cafe</div></body>. Return only one patch_file action that replaces that exact text with <body><main><h1>Rosales Cafe</h1></main></body> using old_text/new_text.',
+         lambda action: action.type == ActionType.PATCH_FILE and action.target == "app/index.html"
+         and isinstance(action.payload, dict)
+         and action.payload.get("operation") == "replace_text"
+         and action.payload.get("old_text") == "<body><div>Rosales Cafe</div></body>"
+         and "<main>" in str(action.payload.get("new_content") or "")
+         and "<h1>" in str(action.payload.get("new_content") or "")),
+    )
+    rows = []
+    qualified = True
+    for name, prompt, validator in probes:
+        result = adapter.execute(model, prompt, max_tokens=512, temperature=0.0)
+        fabric.observe(route_id, result, provider_hint=provider)
+        ok = False
+        error = str(result.error or "")
+        if result.success and str(result.output or "").strip():
+            try:
+                ok = bool(validator(normalize_action_text(str(result.output))))
+                if not ok:
+                    error = "action_protocol_mismatch"
+            except Exception as exc:
+                error = "action_protocol_invalid: %s" % exc
+        fabric.record_probe(provider, route_id, name, ok, latency_ms=result.latency_ms, error=error)
+        rows.append({"probe": name, "ok": ok, "error": error or None})
+        if not ok:
+            qualified = False
+            break
+    return {"route_id": route_id, "qualified": qualified, "probes": rows}
 
 
 def run_one(provider: str, model: str) -> dict:
@@ -154,12 +210,39 @@ def main() -> int:
         return 4
 
     reports = []
+    fabric = CapacityFabric()
     for model in models:
+        route_id = provider_route_id(args.provider, model)
         try:
+            qualification = qualify_ready_agent(args.provider, model, adapter)
+            if not qualification.get("qualified"):
+                report = {
+                    "provider": args.provider,
+                    "model": model,
+                    "passed": False,
+                    "ready_agent_v2": qualification,
+                    "error": "ready_agent_v2_failed",
+                }
+                reports.append(report)
+                fabric.record_live_agent_proof(args.provider, route_id, False, details={"model": model})
+                continue
             report = run_one(args.provider, model)
+            report["ready_agent_v2"] = qualification
+            fabric.record_live_agent_proof(
+                args.provider,
+                route_id,
+                bool(report.get("passed")),
+                details={
+                    "model": model,
+                    "agent_status": report.get("agent_status"),
+                    "iterations": report.get("iterations"),
+                    "valid_deliverable": report.get("valid_deliverable"),
+                },
+            )
         except Exception as exc:
             report = {"provider": args.provider, "model": model, "passed": False,
                       "error": "%s: %s" % (type(exc).__name__, exc)}
+            fabric.record_live_agent_proof(args.provider, route_id, False, details={"model": model})
         reports.append(report)
         if report.get("passed"):
             print(json.dumps({"provider": args.provider, "passed": True, "proof": report}, ensure_ascii=False, indent=2))
