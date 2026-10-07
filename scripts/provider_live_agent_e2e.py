@@ -134,8 +134,18 @@ def main() -> int:
     adapter = registry.adapter(args.provider)
     health = adapter.health()
     if not health.healthy:
-        print(json.dumps({"passed": False, "error": "provider_unhealthy", "provider": args.provider,
-                          "status": health.status}, ensure_ascii=False))
+        metadata = dict(getattr(health, "metadata", {}) or {})
+        safe_metadata = {
+            key: value for key, value in metadata.items()
+            if key in ("http_status", "kind", "models_count", "error")
+        }
+        print(json.dumps({
+            "passed": False,
+            "error": "provider_unhealthy",
+            "provider": args.provider,
+            "status": health.status,
+            "diagnostic": safe_metadata,
+        }, ensure_ascii=False, indent=2))
         return 3
 
     models = choose_models(adapter, args.model)
