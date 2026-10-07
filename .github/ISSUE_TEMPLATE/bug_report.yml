@@ -1,0 +1,47 @@
+name: Reportar problema
+description: Informe um problema reproduzível com versão e evidências.
+title: '[Problema] '
+body:
+- type: markdown
+  attributes:
+    value: Obrigado por ajudar o OLYMPUS. Não envie chaves, senhas ou dados pessoais. Para vulnerabilidades,
+      siga SECURITY.md.
+- type: input
+  id: version
+  attributes:
+    label: Versão, branch e commit
+  validations:
+    required: true
+- type: textarea
+  id: environment
+  attributes:
+    label: Ambiente
+    description: Sistema, navegador e componentes envolvidos; sem dados pessoais.
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: Como reproduzir
+    description: Passos mínimos usando dados de teste.
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: Resultado esperado
+  validations:
+    required: true
+- type: textarea
+  id: actual
+  attributes:
+    label: Resultado observado
+  validations:
+    required: true
+- type: textarea
+  id: evidence
+  attributes:
+    label: Evidências e diagnóstico
+    description: Logs sanitizados ou prints sem segredos. Indique simulação ou provedor real.
+  validations:
+    required: false

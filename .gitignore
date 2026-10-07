@@ -20,3 +20,26 @@ olympus_dev.db
 
 # OS
 .DS_Store
+
+# Ambientes e dados privados de colaboradores
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+.olympus/
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+.coverage
+htmlcov/
+*.pem
+*.key

@@ -1,0 +1,44 @@
+name: Quero contribuir
+description: Apresente sua área de interesse e combine uma primeira contribuição.
+title: '[Contribuição] '
+body:
+- type: markdown
+  attributes:
+    value: Obrigado por ajudar o OLYMPUS. Não envie chaves, senhas ou dados pessoais. Para vulnerabilidades,
+      siga SECURITY.md.
+- type: dropdown
+  id: area
+  attributes:
+    label: Área de interesse
+    options:
+    - Frontend e UX
+    - Backend e núcleo Python
+    - Provedores e roteamento
+    - Testes e qualidade
+    - Instalação e infraestrutura
+    - Documentação e tradução
+  validations:
+    required: true
+- type: textarea
+  id: interest
+  attributes:
+    label: Como gostaria de ajudar
+    description: Descreva interesse e experiência, sem currículo ou contato pessoal obrigatório.
+  validations:
+    required: true
+- type: textarea
+  id: scope
+  attributes:
+    label: Primeira tarefa ou proposta
+    description: Indique uma issue existente ou proposta pequena.
+  validations:
+    required: false
+- type: checkboxes
+  id: agreement
+  attributes:
+    label: Preparação
+    options:
+    - label: Li o guia de contribuição e o código de conduta.
+      required: true
+    - label: Li a licença AGPL-3.0-only e entendo as condições para contribuir com código.
+      required: true
