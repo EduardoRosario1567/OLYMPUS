@@ -85,7 +85,7 @@ function Icon({ children, className = "h-5 w-5" }: { children: ReactNode; classN
 }
 
 function OlympusMark({ className = "h-8 w-8" }: { className?: string }) {
-  return <span className={`${className} olympus-mark shrink-0 bg-contain bg-center bg-no-repeat`} style={{ backgroundImage: "url('/olympus-mark.png?v=2.6.2')" }} aria-hidden="true" />;
+  return <span className={`${className} olympus-mark shrink-0 bg-contain bg-center bg-no-repeat`} style={{ backgroundImage: `url('/olympus-mark.png?v=${olympusVersion.version}')` }} aria-hidden="true" />;
 }
 
 function formatarTempo(segundos: number) {
