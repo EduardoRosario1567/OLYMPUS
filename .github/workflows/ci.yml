@@ -17,15 +17,22 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22.23.2"
 
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
 
       - name: Preparar .env
         run: |
-          cp backend/.env.example backend/.env
-          sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+          python3 - <<'PYENV'
+          from pathlib import Path
+          import secrets
+          from scripts.first_run_setup import render_environment, write_private
+          template = Path("backend/.env.example").read_text()
+          write_private(Path("backend/.env"), render_environment(
+              template, "admin@olympus.local", "ci-test-password", secrets.token_urlsafe(48)
+          ))
+          PYENV
 
       - name: Instalar dependências e navegador real
         working-directory: frontend
@@ -34,9 +41,20 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Rodar suíte de testes (unittest via pytest)
+        env:
+          OLYMPUS_QA_BROWSER_EVIDENCE: ${{ runner.temp }}/olympus-ui-evidence
         run: |
-          export PYTHONPATH=.
+          mkdir -p "$OLYMPUS_QA_BROWSER_EVIDENCE"
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           pytest tests/ -v
+
+      - name: Publicar evidências da interface
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: olympus-ui-evidence
+          path: ${{ runner.temp }}/olympus-ui-evidence
+          if-no-files-found: ignore
 
       - name: Verificar sintaxe Python
         run: python -m compileall -q backend olympus scripts
@@ -46,7 +64,7 @@ jobs:
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           python3 scripts/release_gate.py
 
       - name: Publicar relatório do gate
@@ -59,7 +77,7 @@ jobs:
 
       - name: Subir backend em background
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
@@ -82,12 +100,12 @@ jobs:
 
       - name: Seed — primeira execução (cria dados)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           python3 scripts/seed_demo.py
 
       - name: Seed — segunda execução (deve ser idempotente, não duplicar)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           SAIDA=$(python3 scripts/seed_demo.py)
           echo "$SAIDA"
           echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
@@ -97,25 +115,26 @@ jobs:
           RESP=$(curl -sf -X POST http://localhost:8000/auth/login \
             -H "Content-Type: application/json" \
             -d '{"email":"admin@olympus.local","senha":"ci-test-password"}')
-          echo "$RESP" | python3 -c "import sys,json; json.load(sys.stdin)['access_token']" \
+          echo "$RESP" | python3 -c "import sys,json; assert json.load(sys.stdin).get('access_token')" \
             || (echo "login não retornou access_token" && exit 1)
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Chamar endpoints protegidos com o token real
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
+          curl -f http://localhost:8000/cloud/saas/organization -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/projects" -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/executions" -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/saas/audit" -H "Authorization: Bearer $TOKEN"
           echo
 
       - name: Confirmar que endpoint protegido rejeita sem token (401)
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/cloud/saas/organization)
           [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
@@ -128,12 +147,15 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["22.23.2", "24"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node }}
 
       - name: Instalar dependências
         working-directory: frontend

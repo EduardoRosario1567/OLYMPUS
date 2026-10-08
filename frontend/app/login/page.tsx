@@ -74,7 +74,7 @@ export default function LoginPage() {
                 type="checkbox"
                 checked={lembrar}
                 onChange={(e) => setLembrar(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-transparent"
+                className="h-4 w-4 rounded-sm border-white/20 bg-transparent"
               />
               Lembrar acesso
             </label>

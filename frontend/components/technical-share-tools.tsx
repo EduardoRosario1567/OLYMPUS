@@ -46,7 +46,7 @@ export function TechnicalShareTools() {
   const pathname = usePathname();
   if (pathname !== "/logs") return null;
 
-  return <div style={{ background: "var(--app-panel)", borderColor: "var(--app-border)" }} className="fixed right-4 top-20 z-[95] rounded-xl border p-2 shadow-lg backdrop-blur">
+  return <div style={{ background: "var(--app-panel)", borderColor: "var(--app-border)" }} className="fixed right-4 top-20 z-[95] rounded-xl border p-2 shadow-lg backdrop-blur-sm">
     <DiagnosticActions />
   </div>;
 }
