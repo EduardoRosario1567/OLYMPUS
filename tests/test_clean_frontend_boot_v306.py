@@ -13,7 +13,7 @@ def test_start_always_restarts_frontend_and_clears_next():
     assert 'safe_stop_port 3000 "$ROOT/frontend"' in text
     assert 'rm -rf "$ROOT/frontend/.next"' in text
     assert 'npm run dev -- --hostname 127.0.0.1 --port 3000' in text
-    assert 'wait_current frontend_current 90' in text
+    assert 'wait_current frontend_is_current 90' in text
 
 
 def test_start_sanitizes_known_transient_backend_override():
