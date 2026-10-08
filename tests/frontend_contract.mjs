@@ -38,7 +38,7 @@ await context.route('**/*',async route=>{
  else if(path.endsWith('/download'))return route.fulfill({status:200,contentType:'application/zip',body:'synthetic zip fixture'});
  return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
 });
-async function check(name,fn){try{await fn();checks[name]=true;}catch(e){checks[name]=String(e.stack||e);if(name==='preview'){checks[name]+='\nFRAMES='+JSON.stringify(await Promise.all(page.frames().map(async f=>({url:f.url(),body:await f.locator('body').innerText({timeout:500}).catch(()=>null)}))));if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/preview-failure.png',fullPage:true});}}}
+async function check(name,fn){try{await fn();checks[name]=true;}catch(e){checks[name]=String(e.stack||e);if(name==='preview'){checks[name]+='\nFRAMES='+JSON.stringify(await Promise.all(page.frames().map(async f=>({url:f.url(),body:await f.locator('body').innerText({timeout:500}).catch(()=>null)}))));if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/preview-failure.png',fullPage:true,animations:'disabled'});}}}
 try {
 await check('hydration',async()=>{
  await page.goto(base+'/missao');await page.waitForURL('**/login');
@@ -75,7 +75,7 @@ await check('mission_flow',async()=>{
  for(const name of ['Visualizar','Arquivos','Versões','Publicar'])await expect(page.getByRole('button',{name,exact:true}).first()).toBeVisible();
  await page.getByRole('button',{name:'Arquivos',exact:true}).first().click();await expect(page.getByRole('dialog',{name:'Ambiente do projeto'})).toBeVisible();
  await expect(page.getByText('app/index.html',{exact:true}).first()).toBeVisible();await page.getByRole('button',{name:'Fechar ambiente do projeto'}).click();
- if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop.png',fullPage:true});
+ if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop.png',fullPage:true,animations:'disabled'});
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Baixar resultado',exact:true}).click();await download;
 });
 await check('preview',async()=>{
@@ -105,7 +105,8 @@ await check('style_layout',async()=>{
  assert.equal(await logo.evaluate(el=>getComputedStyle(el).width),'44px');
  for(const theme of ['light','dark']){
   await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop-'+theme+'.png',fullPage:true});
+  await page.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{}))));
+  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop-'+theme+'.png',fullPage:true,animations:'disabled'});
  }
  await page.setViewportSize({width:390,height:844});await expect(sidebar).toBeHidden();
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -114,7 +115,7 @@ await check('version',async()=>{
  const version=JSON.parse(fs.readFileSync(new URL('../frontend/public/olympus-version.json',import.meta.url)));
  await page.setViewportSize({width:1440,height:1000});await expect(page.getByText('OLYMPUS '+version.version,{exact:true})).toBeVisible();
  await page.setViewportSize({width:390,height:844});await expect(page.getByText(version.version,{exact:true})).toBeVisible();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-mobile.png',fullPage:true});
+ if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-mobile.png',fullPage:true,animations:'disabled'});
 });
 await check('failure_diagnostic',async()=>{
 await page.setViewportSize({width:1440,height:1000});execution.status='failed';execution.error='synthetic failure';

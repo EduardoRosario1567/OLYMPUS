@@ -38,7 +38,7 @@ jobs:
           OLYMPUS_QA_BROWSER_EVIDENCE: ${{ runner.temp }}/olympus-ui-evidence
         run: |
           mkdir -p "$OLYMPUS_QA_BROWSER_EVIDENCE"
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           pytest tests/ -v
 
       - name: Publicar evidências da interface
@@ -57,7 +57,7 @@ jobs:
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           python3 scripts/release_gate.py
 
       - name: Publicar relatório do gate
@@ -70,7 +70,7 @@ jobs:
 
       - name: Subir backend em background
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
@@ -93,12 +93,12 @@ jobs:
 
       - name: Seed — primeira execução (cria dados)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           python3 scripts/seed_demo.py
 
       - name: Seed — segunda execução (deve ser idempotente, não duplicar)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE"
           SAIDA=$(python3 scripts/seed_demo.py)
           echo "$SAIDA"
           echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
