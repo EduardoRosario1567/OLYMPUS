@@ -34,9 +34,20 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Rodar suíte de testes (unittest via pytest)
+        env:
+          OLYMPUS_QA_BROWSER_EVIDENCE: ${{ runner.temp }}/olympus-ui-evidence
         run: |
+          mkdir -p "$OLYMPUS_QA_BROWSER_EVIDENCE"
           export PYTHONPATH=.
           pytest tests/ -v
+
+      - name: Publicar evidências da interface
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: olympus-ui-evidence
+          path: ${{ runner.temp }}/olympus-ui-evidence
+          if-no-files-found: ignore
 
       - name: Verificar sintaxe Python
         run: python -m compileall -q backend olympus scripts

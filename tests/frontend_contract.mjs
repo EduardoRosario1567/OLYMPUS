@@ -95,6 +95,21 @@ await check('contrast',async()=>{
  assert.ok(await link.evaluate(el=>{const luminance=s=>{const rgb=s.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};let parent=el,bg;while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}const a=luminance(getComputedStyle(el).color),b=luminance(bg);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;}));
  }
 });
+await check('style_layout',async()=>{
+ await page.setViewportSize({width:1440,height:1000});await page.goto(base+'/missao');
+ const sidebar=page.locator('aside').filter({has:page.getByRole('link',{name:'Nova missão',exact:true})}).first();
+ await expect(sidebar).toBeVisible();
+ assert.equal(await sidebar.evaluate(el=>getComputedStyle(el).width),'250px');
+ assert.equal(await sidebar.evaluate(el=>getComputedStyle(el).paddingLeft),'12px');
+ const logo=sidebar.locator('.olympus-logo');await expect(logo).toBeVisible();
+ assert.equal(await logo.evaluate(el=>getComputedStyle(el).width),'44px');
+ for(const theme of ['light','dark']){
+  await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+  if(process.env.OLYMPUS_QA_BROWSER_EVIDENCE)await page.screenshot({path:process.env.OLYMPUS_QA_BROWSER_EVIDENCE+'/mission-desktop-'+theme+'.png',fullPage:true});
+ }
+ await page.setViewportSize({width:390,height:844});await expect(sidebar).toBeHidden();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+});
 await check('version',async()=>{
  const version=JSON.parse(fs.readFileSync(new URL('../frontend/public/olympus-version.json',import.meta.url)));
  await page.setViewportSize({width:1440,height:1000});await expect(page.getByText('OLYMPUS '+version.version,{exact:true})).toBeVisible();

@@ -8,8 +8,8 @@ class FrontendDependencySecurityV209Tests(unittest.TestCase):
         package = json.loads(Path("frontend/package.json").read_text(encoding="utf-8"))
         version = package["dependencies"]["next"]
         self.assertRegex(version, r"^16\.\d+\.\d+$")
-        # GHSA-vcvr-r3jv-pc5j affects >=16.2.0,<16.3.6.
-        self.assertGreaterEqual(tuple(map(int, version.split("."))), (16, 3, 6))
+        # Current advisory floor, including GHSA-cjq9-62q9-8jv4.
+        self.assertGreaterEqual(tuple(map(int, version.split("."))), (16, 3, 8))
         lock = json.loads(Path("frontend/package-lock.json").read_text(encoding="utf-8"))
         self.assertEqual(lock["packages"]["node_modules/next"]["version"], version)
         self.assertEqual(package["dependencies"]["react"], "18.3.1")
