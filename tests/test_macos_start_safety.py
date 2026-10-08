@@ -16,7 +16,7 @@ class MacStartSafetyTests(unittest.TestCase):
             (root / 'frontend/public/olympus-version.json').write_text(json.dumps({'version': '3.0.8'}))
             prefix = (ROOT / 'start_olympus.command').read_text().split('echo "Iniciando OLYMPUS')[0]
             script = root / 'probe.command'
-            script.write_text(prefix + '\nkill(){ echo "SIGNAL $*"; }\nsleep(){ :; }\n' + scenario)
+            script.write_text(prefix + '\nPYTHON_BIN=python3\nkill(){ echo "SIGNAL $*"; }\nsleep(){ :; }\n' + scenario)
             return subprocess.run(['bash', str(script)], text=True, capture_output=True)
 
     def test_foreign_listener_is_never_signalled(self):
@@ -70,6 +70,9 @@ safe_stop_port 8000 "$ROOT" backend
     def test_health_rejects_previous_version_and_wrong_product(self):
         for body, command in [
             ('{"version":"3.0.7"}', 'backend_is_current'),
+            ('{"version":"3x0x8"}', 'backend_is_current'),
+            ('{"version":"3 .0.8"}', 'backend_is_current'),
+            ('not-json', 'backend_is_current'),
             ('{"version":"3.0.8","product":"other"}', 'frontend_is_current'),
             ('{"version":"3.0.7","product":"olympus"}', 'frontend_is_current'),
         ]:

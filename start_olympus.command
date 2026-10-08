@@ -12,8 +12,11 @@ listener_alive(){ ps -p "$1" -o pid= >/dev/null 2>&1; }
 listener_cwd(){ lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1; }
 backend_body(){ curl -fsS --max-time 2 -H 'Cache-Control: no-cache' "http://127.0.0.1:8000/health?ts=$(date +%s)" 2>/dev/null || true; }
 frontend_body(){ curl -fsS --max-time 2 -H 'Cache-Control: no-cache' "http://127.0.0.1:3000/olympus-version.json?ts=$(date +%s)" 2>/dev/null || true; }
-backend_is_current(){ b="$(backend_body)"; printf '%s' "$b" | grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$EXPECTED_VERSION"'"'; }
-frontend_is_current(){ b="$(frontend_body)"; printf '%s' "$b" | grep -Eq '"product"[[:space:]]*:[[:space:]]*"olympus"' && printf '%s' "$b" | grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"$EXPECTED_VERSION"'"'; }
+body_is_current(){
+  "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("version")==sys.argv[1] and (sys.argv[2]!="frontend" or d.get("product")=="olympus") else 1)' "$EXPECTED_VERSION" "$1" 2>/dev/null
+}
+backend_is_current(){ backend_body | body_is_current backend; }
+frontend_is_current(){ frontend_body | body_is_current frontend; }
 wait_current(){ which="$1"; seconds="$2"; for _ in $(seq 1 "$seconds"); do if "$which"; then return 0; fi; sleep 1; done; return 1; }
 
 safe_stop_port(){
