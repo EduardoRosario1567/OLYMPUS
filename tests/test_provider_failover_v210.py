@@ -154,8 +154,16 @@ class TestProviderFailoverV210(unittest.TestCase):
         from app.core.provider_runtime import configured_mission_routes
         registry = ProviderRegistry()
         registry.register("omniroute", LiveOmniRoute(), 10)
-        with patch.dict(os.environ, {"OLYMPUS_FREE_FALLBACK_PROVIDERS":""}, clear=True):
-            ids = tuple(route.id for route in configured_mission_routes(registry))
+        # Catalog ordering assumes no previously qualified/cooling-down routes.
+        # Use fresh stores even when another test or release gate persisted state.
+        with tempfile.TemporaryDirectory() as directory:
+            clean = {
+                "OLYMPUS_FREE_FALLBACK_PROVIDERS": "",
+                "OLYMPUS_CAPACITY_STATE_PATH": str(Path(directory) / "capacity.json"),
+                "OLYMPUS_PROVIDER_SETTINGS_PATH": str(Path(directory) / "providers.json"),
+            }
+            with patch.dict(os.environ, clean, clear=True):
+                ids = tuple(route.id for route in configured_mission_routes(registry))
         self.assertEqual(ids[0], "Conding-free")
         self.assertEqual(set(ids[1:]), {"openrouter/openrouter/free", "openrouter/openai/gpt-oss-20b:free", "cohere/north-mini-code:free", "nvidia/nemotron-3-super-120b:free"})
         self.assertEqual(len(ids), len(set(ids)))

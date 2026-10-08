@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
@@ -26,6 +26,12 @@ jobs:
         run: |
           cp backend/.env.example backend/.env
           sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+
+      - name: Instalar dependências e navegador real
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
 
       - name: Rodar suíte de testes (unittest via pytest)
         run: |
@@ -37,12 +43,6 @@ jobs:
 
       - name: Verificar dependências Python conhecidas
         run: pip install pip-audit && pip-audit -r backend/requirements.txt --strict
-
-      - name: Instalar dependências e navegador real
-        working-directory: frontend
-        run: |
-          npm ci
-          npx playwright install chromium
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         run: |
@@ -133,7 +133,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências
         working-directory: frontend
