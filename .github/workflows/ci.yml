@@ -24,8 +24,15 @@ jobs:
 
       - name: Preparar .env
         run: |
-          cp backend/.env.example backend/.env
-          sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+          python3 - <<'PYENV'
+          from pathlib import Path
+          import secrets
+          from scripts.first_run_setup import render_environment, write_private
+          template = Path("backend/.env.example").read_text()
+          write_private(Path("backend/.env"), render_environment(
+              template, "admin@olympus.local", "ci-test-password", secrets.token_urlsafe(48)
+          ))
+          PYENV
 
       - name: Instalar dependências e navegador real
         working-directory: frontend
@@ -108,25 +115,26 @@ jobs:
           RESP=$(curl -sf -X POST http://localhost:8000/auth/login \
             -H "Content-Type: application/json" \
             -d '{"email":"admin@olympus.local","senha":"ci-test-password"}')
-          echo "$RESP" | python3 -c "import sys,json; json.load(sys.stdin)['access_token']" \
+          echo "$RESP" | python3 -c "import sys,json; assert json.load(sys.stdin).get('access_token')" \
             || (echo "login não retornou access_token" && exit 1)
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "::add-mask::$TOKEN"
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Chamar endpoints protegidos com o token real
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
+          curl -f http://localhost:8000/cloud/saas/organization -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/projects" -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/executions" -H "Authorization: Bearer $TOKEN"
           echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
+          curl -f "http://localhost:8000/cloud/saas/audit" -H "Authorization: Bearer $TOKEN"
           echo
 
       - name: Confirmar que endpoint protegido rejeita sem token (401)
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/cloud/saas/organization)
           [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
