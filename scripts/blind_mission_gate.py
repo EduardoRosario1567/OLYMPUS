@@ -28,6 +28,19 @@ FINAL_HTML = """<!doctype html>
 </head><body><main><nav aria-label="Navegação principal"><a href="#inicio">Início</a><a href="#processo">Processo</a><a href="#entrega">Entrega</a></nav><section id="inicio"><p>OLYMPUS · RESULTADO VERIFICADO</p><h1>Missão concluída com continuidade.</h1><p>Esta entrega foi criada, reparada, validada e publicada após uma troca de provedor. O artefato permanece disponível mesmo quando a primeira rota falha.</p></section><section id="processo"><h2>Processo preservado</h2><p>O checkpoint manteve o trabalho produzido e permitiu continuar a missão em uma rota gratuita independente.</p></section><section id="entrega"><h2>Interação validada</h2><button id="btn-teste" type="button" onclick="this.textContent='Botão funcionando';document.getElementById('status').textContent='Interação validada'">Testar interação</button><p id="status" aria-live="polite">Aguardando interação</p></section></main></body></html>"""
 
 
+DELIVERY_CONCEPT = """# Visual thesis
+A dark responsive page with clear cyan actions and readable section hierarchy.
+# Content plan
+Confirmed facts: this is a deterministic test of failover and publication.
+Unknown facts: live provider availability and human visual approval.
+# Interaction plan
+Navigation anchors and btn-teste must work; the button updates the live status.
+# Evidence
+Review limits: no browser claim is made by the simulated model. The independent
+gate opens the published preview and tests the click after mission completion.
+"""
+
+
 class BrowserUnavailable(RuntimeError):
     pass
 
@@ -61,7 +74,10 @@ class Handler(BaseHTTPRequestHandler):
         if model == "blind/fallback":
             if state["fallback_calls"] == 0:
                 state["fallback_calls"] += 1
-                content = json.dumps({"type": "create_file", "target": "app/index.html", "payload": FINAL_HTML, "reason": "deliver verified interactive page"}, ensure_ascii=False)
+                content = json.dumps({"type": "create_file", "target": "docs/delivery-concept.md", "payload": DELIVERY_CONCEPT, "reason": "document test scope and evidence plan"}, ensure_ascii=False)
+            elif state["fallback_calls"] == 1:
+                state["fallback_calls"] += 1
+                content = json.dumps({"type": "create_file", "target": "app/index.html", "payload": FINAL_HTML, "reason": "deliver interactive page for independent verification"}, ensure_ascii=False)
             else:
                 state["fallback_calls"] += 1
                 content = json.dumps({"type": "finish", "target": None, "payload": "verified", "reason": "browser contract passed"})
@@ -91,7 +107,7 @@ const { chromium } = require('playwright');
   const status = await page.locator('#status').textContent();
   await browser.close();
   if (button !== 'Botão funcionando' || status !== 'Interação validada') process.exit(2);
-  console.log(JSON.stringify({button, status}));
+  console.log(JSON.stringify({result: button, status, validator: 'playwright'}));
 })().catch(error => { console.error(error.stack || error); process.exit(1); });
 '''
     browser_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
@@ -179,6 +195,7 @@ def main() -> int:
                 "primary_failed": server.state["calls"].count("blind/primary") >= 1,
                 "fallback_used": server.state["calls"].count("blind/fallback") >= 2,
                 "published": root_file.is_file(),
+                "delivery_concept": (root_file.parent.parent / "docs/delivery-concept.md").is_file(),
                 "previewable": preview.entrypoint == "app/index.html",
                 "browser_click": browser.get("result") == "Botão funcionando" and browser.get("status") == "Interação validada",
                 "browser_validator_present": browser.get("validator", "playwright") in {"playwright", "jsdom-runtime"},

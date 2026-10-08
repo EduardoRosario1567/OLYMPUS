@@ -11,28 +11,30 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 missing=""
-for tool in ditto curl python3 node npm; do
+for tool in ditto curl node npm; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     missing="$missing $tool"
   fi
 done
 if [ -n "$missing" ]; then
   echo "ERRO: componentes necessários não encontrados:$missing"
-  echo "Instale Python 3.9 ou superior e Node.js 18 ou superior antes de continuar."
+  echo "Instale Python 3.11 ou superior e Node.js 22.23.2 (série 22) ou 24.15 (série 24) antes de continuar."
   read -r -p "Pressione ENTER para fechar."
   exit 1
 fi
 
-if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'; then
-  echo "ERRO: o Python precisa ser 3.9 ou superior."
-  read -r -p "Pressione ENTER para fechar."
-  exit 1
-fi
-if ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'; then
-  echo "ERRO: o Node.js precisa ser 18 ou superior."
-  read -r -p "Pressione ENTER para fechar."
-  exit 1
-fi
+# Use a compatible interpreter without changing the system Python.
+PYTHON_BIN=""
+for candidate in "${OLYMPUS_PYTHON:-}" python3.13 python3.12 python3.11 python3; do
+  [ -n "$candidate" ] || continue
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+    PYTHON_BIN="$candidate"; break
+  fi
+done
+[ -n "$PYTHON_BIN" ] || { echo "ERRO: Python 3.11 ou superior necessário. O Python do sistema será preservado."; exit 1; }
+node -e 'const [major,minor,patch]=process.versions.node.split(".").map(Number); process.exit((major===22 && (minor>23 || (minor===23 && patch>=2))) || (major===24 && minor>=15) ? 0 : 1)' || {
+  echo "ERRO: use Node 22.23.2+ (série 22) ou 24.15+ (série 24). No macOS 12, use Node 22."; exit 1;
+}
 
 TARGET_ROOT="$HOME/Documents/OLYMPUS-PILOTO-$VERSION"
 if [ -e "$TARGET_ROOT" ]; then
