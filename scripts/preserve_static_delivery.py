@@ -1,4 +1,6 @@
 """Persist only validated static mission outputs. Never execute delivered files."""
+import hashlib
+import json
 import os
 import shutil
 import tempfile
@@ -34,6 +36,21 @@ def preserve_validated_site(workspace, destination_root, mission_id):
         post_issues, post_count = verify(str(staging / "site"), str(root))
         if post_issues or post_count != count:
             raise ValueError("BLOCKED: copied artifact failed validation")
+        manifest = {
+            "mission_id": mission_id,
+            "status": "DONE",
+            "files": [],
+        }
+        for candidate in sorted((staging / "site").rglob("*")):
+            if candidate.is_file():
+                manifest["files"].append({
+                    "path": candidate.relative_to(staging / "site").as_posix(),
+                    "size_bytes": candidate.stat().st_size,
+                    "sha256": hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                })
+        (staging / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         os.replace(staging, destination)
     finally:
         if staging.exists():
