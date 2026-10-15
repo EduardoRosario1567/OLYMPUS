@@ -62,6 +62,8 @@ jobs:
                   "        with self.assertRaises(OSError):\\n"
                   "            Path('/work/escape').write_text('fail')\\n"
               )
+              Path(root).chmod(0o755)
+              tests.chmod(0o755)
               agent = ActionExecutor(root, isolated_tests=True)
               action = AgentAction(ActionType.RUN_TEST, "tests.test_isolation", ["tests.test_isolation"])
               result = agent.execute(action)
