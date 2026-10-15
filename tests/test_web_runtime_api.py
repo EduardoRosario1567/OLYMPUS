@@ -40,6 +40,16 @@ class TestWebRuntimeAPI(unittest.TestCase):
         self.assertEqual(fetched.status_code, 200)
         self.assertEqual(fetched.json()["task"], "Create a small helper")
 
+    def test_static_mission_blocked_before_any_runner_or_provider_call(self):
+        with patch("app.api.missions._run_mission") as runner:
+            response = self.client.post("/missions", json={
+                "task": "Construir Rosales Café",
+                "static_delivery": True,
+            })
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("BLOCKED", response.json()["detail"])
+        runner.assert_not_called()
+
     def test_unknown_mission_is_404(self):
         self.assertEqual(self.client.get("/missions/missing").status_code, 404)
 
