@@ -92,7 +92,8 @@ await check('contrast',async()=>{
  await page.goto(base+'/missao');for(const theme of ['light','dark']){
  await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
  const link=page.getByRole('link',{name:'Nova missão',exact:true}).first();await expect(link).toBeVisible();
- assert.ok(await link.evaluate(el=>{const luminance=s=>{const rgb=s.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};let parent=el,bg;while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}const a=luminance(getComputedStyle(el).color),b=luminance(bg);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;}));
+ const contrastDebug=await link.evaluate(el=>({color:getComputedStyle(el).color,background:getComputedStyle(el).backgroundColor,parent:getComputedStyle(el.parentElement).backgroundColor,body:getComputedStyle(document.body).backgroundColor,theme:document.documentElement.dataset.theme}));
+ assert.ok(await link.evaluate(el=>{const luminance=s=>{const rgb=s.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};let parent=el,bg;while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}const a=luminance(getComputedStyle(el).color),b=luminance(bg);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5;}), JSON.stringify(contrastDebug));
  }
 });
 await check('version',async()=>{
