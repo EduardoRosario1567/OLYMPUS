@@ -46,7 +46,7 @@ class StaticDeliveryTests(unittest.TestCase):
     def test_reject_symlink(self):
         (self.site / "index.html").write_text("ok")
         (self.site / "outside.txt").symlink_to(Path(self.temp.name))
-        self.assertTrue(any("link proibido" in issue or "Arquivo especial" in issue for issue in self.check()))
+        self.assertTrue(any("proibido" in issue for issue in self.check()))
 
     def test_reject_outside_root(self):
         self.assertTrue(module.verify(self.temp.name, self.root)[0])
