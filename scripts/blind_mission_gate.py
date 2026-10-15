@@ -190,7 +190,7 @@ def main() -> int:
                 "fallback_used": server.state["calls"].count("blind/fallback") >= 2,
                 "published": root_file.is_file(),
                 "previewable": preview.entrypoint == "app/index.html",
-                "browser_click": browser.get("result") == "Botão funcionando" and browser.get("status") == "Interação validada",
+                "browser_click": browser.get("button", browser.get("result")) == "Botão funcionando" and browser.get("status") == "Interação validada",
                 "browser_validator_present": browser.get("validator", "playwright") in {"playwright", "jsdom-runtime"},
             }
             if not all(checks.values()):
