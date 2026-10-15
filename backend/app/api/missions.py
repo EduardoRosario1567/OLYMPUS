@@ -82,7 +82,7 @@ def _run_mission(mission_id: str) -> None:
         rec = _MISSIONS[mission_id]
         task = rec["task"]
         max_iterations = rec["_max_iterations"]
-        static_delivery = rec["_static_delivery"]
+        static_delivery = rec.get("_static_delivery", False)
         rec["status"] = "running"
         rec["updated_at"] = _now()
 
