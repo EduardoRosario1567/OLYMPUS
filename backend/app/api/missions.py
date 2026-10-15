@@ -89,12 +89,23 @@ def _run_mission(mission_id: str) -> None:
     workspace = Path(tempfile.mkdtemp(prefix="olympus-web-"))
     try:
         _seed_workspace(workspace)
-        _event(mission_id, "mission_start", isolated=True)
+        _event(mission_id, "mission_start", temporary_workspace=True, os_sandbox_verified=False)
         router_adapter = OmniRouteAdapter(
             base_url=os.environ.get("OLYMPUS_OMNIROUTE_URL", "http://127.0.0.1:20128"),
             api_key=(os.environ.get("OLYMPUS_OMNIROUTE_API_KEY") or os.environ.get("OMNIROUTE_API_KEY") or None),
             timeout_seconds=int(os.environ.get("OLYMPUS_MODEL_TIMEOUT", "30")),
         )
+        if static_delivery:
+            task = (
+                "STATIC WEBSITE DELIVERY CONTRACT (mandatory):\\n"
+                "Create a complete standalone site in site/index.html relative to your workspace root.\\n"
+                "Put CSS, JavaScript, images and other assets only within site/.\\n"
+                "Use local, relative asset paths; do not reference external scripts, styles, fonts, images or embeds.\\n"
+                "Never write outside the disposable workspace.\\n"
+                "Do not claim completion until site/index.html exists and required assets are present.\\n"
+                "The OLYMPUS delivery gate checks file safety separately; report any limitation accurately.\\n\\n"
+                "USER REQUEST:\\n" + task
+            )
         spec = MissionSpec(
             mission_id,
             "Web Tester Mission",
@@ -134,7 +145,7 @@ def _run_mission(mission_id: str) -> None:
             rec["models"] = models or rec["models"]
             rec["files_modified"] = files
             rec["tests_run"] = tests
-            rec["confidence"] = 1.0 if result.success else 0.0
+            rec["confidence"] = 1.0 if result.success and not delivery_error else 0.0
             rec["error"] = delivery_error or result.error
             rec["delivery_available"] = delivery_available
             rec["updated_at"] = _now()
