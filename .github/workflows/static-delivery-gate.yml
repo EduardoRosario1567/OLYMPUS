@@ -1,0 +1,23 @@
+name: Static Delivery Gate
+on:
+  push:
+    branches:
+      - olympus-static-delivery-safe-v1
+  pull_request:
+    paths:
+      - 'scripts/verificar_entrega_estatica.py'
+      - 'tests/test_static_delivery_gate.py'
+      - '.github/workflows/static-delivery-gate.yml'
+permissions:
+  contents: read
+jobs:
+  static-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run seven isolated validation tests
+        run: python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
