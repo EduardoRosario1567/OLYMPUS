@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # Requalification after GitHub account email verification.
       - name: Compile static delivery modules
         run: python -m py_compile scripts/verificar_entrega_estatica.py scripts/preserve_static_delivery.py backend/app/api/missions.py
       - name: Run static gate and preservation tests
