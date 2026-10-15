@@ -54,13 +54,13 @@ jobs:
               tests.mkdir()
               (tests / "__init__.py").write_text("")
               (tests / "test_isolation.py").write_text(
-                  "import os, unittest\\n"
-                  "from pathlib import Path\\n"
-                  "class Proof(unittest.TestCase):\\n"
-                  "    def test_restrictions(self):\\n"
-                  "        self.assertEqual(os.geteuid(), 65534)\\n"
-                  "        with self.assertRaises(OSError):\\n"
-                  "            Path('/work/escape').write_text('fail')\\n"
+                  "import os, unittest\n"
+                  "from pathlib import Path\n"
+                  "class Proof(unittest.TestCase):\n"
+                  "    def test_restrictions(self):\n"
+                  "        self.assertEqual(os.geteuid(), 65534)\n"
+                  "        with self.assertRaises(OSError):\n"
+                  "            Path('/work/escape').write_text('fail')\n"
               )
               Path(root).chmod(0o755)
               tests.chmod(0o755)
