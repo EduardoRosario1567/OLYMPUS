@@ -22,6 +22,9 @@ UNSAFE_JS = re.compile(r"\b(?:eval|new\s+Function)\s*\(", re.I)
 REMOTE_REF = re.compile(r"""(?:src|href)\s*=\s*["']\s*(?:https?:)?//""", re.I)
 
 
+REMOTE_CSS = re.compile(r"""(?:@import\s+|url\(\s*["']?)\s*(?:https?:)?//""", re.I)
+REMOTE_SCRIPT = re.compile(r"""\b(?:fetch|importScripts)\s*\(\s*["']\s*(?:https?:)?//""", re.I)
+
 def verify(directory, root):
     issues = []
     base = Path(root).expanduser().resolve()
@@ -63,7 +66,7 @@ def verify(directory, root):
                 issues.append("Arquivo muito grande: " + rel)
             if rel == "index.html":
                 index_found = True
-            if path.suffix.lower() not in {".html", ".js"} or info.st_size > MAX_FILE_BYTES:
+            if path.suffix.lower() not in {".html", ".js", ".css"} or info.st_size > MAX_FILE_BYTES:
                 continue
             try:
                 data = path.read_text(encoding="utf-8")
@@ -75,6 +78,10 @@ def verify(directory, root):
                     issues.append("Elemento HTML bloqueado: " + rel)
                 if REMOTE_REF.search(data):
                     issues.append("Recurso externo nao aprovado: " + rel)
+            if path.suffix.lower() == ".css" and REMOTE_CSS.search(data):
+                issues.append("Recurso CSS externo proibido: " + rel)
+            if path.suffix.lower() == ".js" and REMOTE_SCRIPT.search(data):
+                issues.append("Recurso JS externo proibido: " + rel)
             if path.suffix.lower() == ".js" and UNSAFE_JS.search(data):
                 issues.append("Execucao dinamica insegura: " + rel)
     if not index_found:
