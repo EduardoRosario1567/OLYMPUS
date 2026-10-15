@@ -163,6 +163,13 @@ def _run_mission(mission_id: str) -> None:
 
 @router.post("", response_model=MissionView, status_code=202)
 def create_mission(payload: MissionCreate):
+    if payload.static_delivery:
+        # No verified OS-level sandbox is wired to this legacy runner.
+        # Reject before creating a thread or contacting a model provider.
+        raise HTTPException(
+            status_code=503,
+            detail="BLOCKED: entrega estática exige isolamento de execução comprovado; nenhum provedor foi acionado.",
+        )
     mission_id = uuid.uuid4().hex[:12]
     now = _now()
     record = {
