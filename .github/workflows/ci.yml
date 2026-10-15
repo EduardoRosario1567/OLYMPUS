@@ -102,22 +102,16 @@ jobs:
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Chamar endpoints protegidos com o token real
-        env:
-          OLYMPUS_CI_HTTP_SMOKE: "1"
+      - name: Verificar endpoints SaaS protegidos com token real
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
+          curl -fsS http://127.0.0.1:8000/cloud/saas/organizations -H "Authorization: Bearer $TOKEN" -o /tmp/ci-organizations.json
+          python3 -c "import json; assert isinstance(json.load(open('/tmp/ci-organizations.json'))['organizations'], list)"
+          curl -fsS http://127.0.0.1:8000/cloud/projects -H "Authorization: Bearer $TOKEN" -o /tmp/ci-projects.json
+          python3 -c "import json; assert isinstance(json.load(open('/tmp/ci-projects.json'))['projects'], list)"
 
       - name: Confirmar que endpoint protegido rejeita sem token (401)
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/cloud/saas/organizations)
           [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
