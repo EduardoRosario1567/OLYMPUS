@@ -96,7 +96,8 @@ body {
 }
 
 .sidebar-link {
-  color: var(--app-muted);
+  /* Navegação precisa manter contraste WCAG em ambos os temas. */
+  color: var(--app-text);
 }
 
 .sidebar-link:hover {
