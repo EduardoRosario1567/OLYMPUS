@@ -43,6 +43,16 @@ class StaticDeliveryTests(unittest.TestCase):
         (self.site / "app.js").write_text("eval('1')")
         self.assertTrue(any("Execucao dinamica" in issue for issue in self.check()))
 
+    def test_reject_external_css_resource(self):
+        (self.site / "index.html").write_text("<link rel='stylesheet' href='theme.css'>")
+        (self.site / "theme.css").write_text('body { background: url("https://remote.example/background.png"); }')
+        self.assertTrue(any("CSS externo" in issue for issue in self.check()))
+
+    def test_reject_external_javascript_fetch(self):
+        (self.site / "index.html").write_text("<script src='app.js'></script>")
+        (self.site / "app.js").write_text('fetch("https://remote.example/tracker")')
+        self.assertTrue(any("JS externo" in issue for issue in self.check()))
+
     def test_reject_symlink(self):
         (self.site / "index.html").write_text("ok")
         (self.site / "outside.txt").symlink_to(Path(self.temp.name))
