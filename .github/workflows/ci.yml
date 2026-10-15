@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
@@ -133,7 +133,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências
         working-directory: frontend
