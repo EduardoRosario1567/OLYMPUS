@@ -31,11 +31,24 @@ class TargetedTestRunner:
     def __init__(self, cwd: Optional[str] = None) -> None:
         self.cwd = str(Path(cwd).resolve()) if cwd else None
 
+    def _is_trusted_repository_checkout(self) -> bool:
+        # Fail closed: path names and files inside a workspace are forgeable,
+        # so no checkout is currently attested as trusted by this runner.
+        return False
+
     def run_unittest(
         self,
         test_modules: Sequence[str],
         timeout_seconds: int = 60,
     ) -> TestRunResult:
+
+        # Agent-controlled workspaces may contain attacker-controlled Python
+        # test modules. A clean environment is not an OS sandbox. Until a
+        # sandbox-backed test worker is integrated, do not execute them.
+        if self.cwd is not None and not self._is_trusted_repository_checkout():
+            raise PermissionError(
+                "BLOCKED: workspace tests require an OS-isolated runner"
+            )
 
         if not test_modules:
             raise ValueError("at least one test module is required")
