@@ -23,7 +23,17 @@ jobs:
         run: |
           npm ci
           npm install --save-exact next@16.4.1
-          npm audit fix || true
+          npm install --save-dev --save-exact tailwindcss@4.3.3 @tailwindcss/postcss
+          npm audit fix
+          printf "module.exports = { plugins: { '@tailwindcss/postcss': {} } };\n" > postcss.config.js
+          python3 - <<'PY'
+          from pathlib import Path
+          css = Path('app/globals.css')
+          contents = css.read_text()
+          before = '@tailwind base;\n@tailwind components;\n@tailwind utilities;'
+          assert contents.startswith(before), 'Tailwind entry CSS unexpectedly changed'
+          css.write_text(contents.replace(before, '@import "tailwindcss";\n@config "../tailwind.config.ts";', 1))
+          PY
       - name: Check candidate and capture audit results
         working-directory: frontend
         run: |
@@ -37,4 +47,6 @@ jobs:
           path: |
             frontend/package.json
             frontend/package-lock.json
+            frontend/postcss.config.js
+            frontend/app/globals.css
           if-no-files-found: error
