@@ -72,7 +72,7 @@ def _seed_workspace(root: Path) -> None:
     (root / "app" / "__init__.py").write_text("", encoding="utf-8")
     (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
     (root / "README.md").write_text(
-        "# OLYMPUS Web Tester Sandbox\n\nThis workspace is disposable and isolated.\n",
+        "# OLYMPUS Temporary Workspace\n\nThis folder is disposable; OS-level isolation is NOT verified.\n",
         encoding="utf-8",
     )
 
