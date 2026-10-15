@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from olympus.agent.mission import AutonomousPatchRunner, MissionSpec, MissionStep
 from olympus.routing.omniroute_adapter import OmniRouteAdapter
+from scripts.preserve_static_delivery import preserve_validated_site
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/missions", tags=["missions"])
 class MissionCreate(BaseModel):
     task: str = Field(min_length=3, max_length=12000)
     max_iterations: int = Field(default=24, ge=1, le=24)
+    static_delivery: bool = False
 
 
 class MissionView(BaseModel):
@@ -33,6 +35,7 @@ class MissionView(BaseModel):
     tests_run: List[str] = []
     confidence: Optional[float] = None
     error: Optional[str] = None
+    delivery_available: bool = False
 
 
 _LOCK = threading.Lock()
@@ -79,6 +82,7 @@ def _run_mission(mission_id: str) -> None:
         rec = _MISSIONS[mission_id]
         task = rec["task"]
         max_iterations = rec["_max_iterations"]
+        static_delivery = rec["_static_delivery"]
         rec["status"] = "running"
         rec["updated_at"] = _now()
 
@@ -114,16 +118,27 @@ def _run_mission(mission_id: str) -> None:
             for name in state.tests_run:
                 if name not in tests:
                     tests.append(name)
+        delivery_error = None
+        delivery_available = False
+        if static_delivery and result.success:
+            try:
+                # Only the explicitly requested static workflow uses this gate.
+                delivery_root = os.environ.get("OLYMPUS_STATIC_DELIVERY_ROOT") or str(Path.home() / ".olympus" / "deliveries")
+                preserve_validated_site(workspace, delivery_root, mission_id)
+                delivery_available = True
+            except (ValueError, FileExistsError, OSError) as exc:
+                delivery_error = str(exc)
         with _LOCK:
             rec = _MISSIONS[mission_id]
-            rec["status"] = "completed" if result.success else result.status
+            rec["status"] = "failed" if delivery_error else ("completed" if result.success else result.status)
             rec["models"] = models or rec["models"]
             rec["files_modified"] = files
             rec["tests_run"] = tests
             rec["confidence"] = 1.0 if result.success else 0.0
-            rec["error"] = result.error
+            rec["error"] = delivery_error or result.error
+            rec["delivery_available"] = delivery_available
             rec["updated_at"] = _now()
-        _event(mission_id, "mission_end", status=result.status)
+        _event(mission_id, "mission_end", status="failed" if delivery_error else result.status, delivery_available=delivery_available)
     except Exception as exc:
         with _LOCK:
             rec = _MISSIONS[mission_id]
@@ -150,7 +165,9 @@ def create_mission(payload: MissionCreate):
         "tests_run": [],
         "confidence": None,
         "error": None,
+        "delivery_available": False,
         "events": [],
+        "_static_delivery": payload.static_delivery,
         "_max_iterations": payload.max_iterations,
     }
     with _LOCK:
