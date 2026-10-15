@@ -1,0 +1,40 @@
+name: Frontend Dependency Remediation Candidate
+
+on:
+  push:
+    branches: [olympus-static-delivery-safe-v1]
+    paths:
+      - ".github/workflows/frontend-dependency-candidate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Generate updated dependency candidate
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --save-exact next@16.4.1
+          npm audit fix || true
+      - name: Check candidate and capture audit results
+        working-directory: frontend
+        run: |
+          npm run build
+          npm audit --audit-level=high
+      - name: Preserve generated manifest and lock for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dependency-candidate
+          path: |
+            frontend/package.json
+            frontend/package-lock.json
+          if-no-files-found: error
