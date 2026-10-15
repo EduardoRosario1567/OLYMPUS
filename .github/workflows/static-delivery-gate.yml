@@ -7,6 +7,9 @@ on:
     paths:
       - 'scripts/verificar_entrega_estatica.py'
       - 'tests/test_static_delivery_gate.py'
+      - 'tests/test_preserve_static_delivery.py'
+      - 'scripts/preserve_static_delivery.py'
+      - 'backend/app/api/missions.py'
       - '.github/workflows/static-delivery-gate.yml'
 permissions:
   contents: read
@@ -19,5 +22,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Run seven isolated validation tests
-        run: python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
+      - name: Run static delivery and preservation regression tests
+        run: python -m unittest discover -s tests -p 'test_*static_delivery.py' -v && python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
