@@ -28,8 +28,9 @@ class TargetedTestRunner:
     environment and a temporary home; this is not an OS sandbox.
     """
 
-    def __init__(self, cwd: Optional[str] = None) -> None:
+    def __init__(self, cwd: Optional[str] = None, isolated: bool = False) -> None:
         self.cwd = str(Path(cwd).resolve()) if cwd else None
+        self.isolated = bool(isolated)
 
     def run_unittest(
         self,
@@ -39,6 +40,23 @@ class TargetedTestRunner:
 
         if not test_modules:
             raise ValueError("at least one test module is required")
+
+        if self.isolated:
+            if self.cwd is None:
+                raise ValueError("isolated runner requires a workspace")
+            if len(test_modules) != 1:
+                raise ValueError("isolated runner requires exactly one test module")
+            from scripts.isolated_unittest_runner import execute
+            result = execute(self.cwd, test_modules[0], timeout=timeout_seconds)
+            stdout = compact_output(result.get("stdout", ""))
+            stderr = compact_output(result.get("stderr", result.get("reason", "")))
+            return TestRunResult(
+                success=result["status"] == "DONE",
+                command=("docker", "python", "-m", "unittest", test_modules[0]),
+                returncode=result.get("exit_code", 2),
+                stdout=stdout.text,
+                stderr=stderr.text,
+            )
 
         if len(test_modules) == 1 and test_modules[0].startswith("shell:"):
             target = test_modules[0][len("shell:"):]
