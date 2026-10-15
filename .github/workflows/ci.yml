@@ -103,6 +103,8 @@ jobs:
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Chamar endpoints protegidos com o token real
+        env:
+          OLYMPUS_CI_HTTP_SMOKE: "1"
         run: |
           curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
           echo
