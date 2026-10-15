@@ -40,6 +40,7 @@ class AutonomousDeveloper:
         checkpoint_store: Optional[MissionCheckpointStore] = None,
         skill_registry: Optional[SkillRegistry] = None,
         skills_fabric: Optional[Any] = None,
+        isolated_tests: bool = False,
     ) -> None:
         self.root = str(Path(root).resolve())
         self.skill_registry = skill_registry or SkillRegistry()
@@ -51,6 +52,13 @@ class AutonomousDeveloper:
             checkpoint_store=checkpoint_store,
             skill_registry=self.skill_registry,
         )
+        if isolated_tests:
+            from olympus.agent.loop import AgentLoop
+            from olympus.agent.executor import ActionExecutor
+            self.runner.loop_factory = lambda workspace, planner: AgentLoop(
+                workspace, planner,
+                executor=ActionExecutor(workspace, isolated_tests=True),
+            )
         if skills_fabric is not None:
             from olympus.agent.planner import ModelPlanner
             self.runner.planner_factory = lambda adapter, model: ModelPlanner(
