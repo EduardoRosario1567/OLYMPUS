@@ -61,7 +61,7 @@ jobs:
         run: |
           export PYTHONPATH=.
           cd backend
-          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+          PYTHONPATH=..:. nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
 
       - name: Esperar o backend responder
