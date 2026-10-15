@@ -62,6 +62,16 @@ class Handler(BaseHTTPRequestHandler):
             if state["fallback_calls"] == 0:
                 state["fallback_calls"] += 1
                 content = json.dumps({"type": "create_file", "target": "app/index.html", "payload": FINAL_HTML, "reason": "deliver verified interactive page"}, ensure_ascii=False)
+            elif state["fallback_calls"] == 1:
+                state["fallback_calls"] += 1
+                concept = ("# Visual thesis\\nResponsive dark layout with prominent interactive action.\\n\\n"
+                           "# Content plan\\nA verified demonstration page; no external factual claims.\\n\\n"
+                           "# Interaction plan\\nButton changes its label and live status on click.\\n\\n"
+                           "# Evidence\\nBrowser interaction must be checked by this gate after preview.\\n\\n"
+                           "Confirmed facts: the required button and status exist in HTML.\\n"
+                           "Unknown facts: real-world performance and accessibility beyond this gate.\\n"
+                           "Review limits: visual and full-device evaluation remain pending.\\n")
+                content = json.dumps({"type": "create_file", "target": "docs/delivery-concept.md", "payload": concept, "reason": "document concept and review limits"}, ensure_ascii=False)
             else:
                 state["fallback_calls"] += 1
                 content = json.dumps({"type": "finish", "target": None, "payload": "verified", "reason": "browser contract passed"})
