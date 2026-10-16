@@ -46,13 +46,19 @@ class TargetedTestRunner:
                 raise ValueError("isolated runner requires a workspace")
             if len(test_modules) != 1:
                 raise ValueError("isolated runner requires exactly one test module")
-            from scripts.isolated_unittest_runner import execute
+            provider = os.environ.get("OLYMPUS_ISOLATED_TEST_PROVIDER", "docker").strip().lower()
+            if provider == "docker":
+                from scripts.isolated_unittest_runner import execute
+            elif provider == "e2b":
+                from scripts.remote_e2b_unittest_runner import execute
+            else:
+                raise ValueError("BLOCKED: unsupported isolated test provider")
             result = execute(self.cwd, test_modules[0], timeout=timeout_seconds)
             stdout = compact_output(result.get("stdout", ""))
             stderr = compact_output(result.get("stderr", result.get("reason", "")))
             return TestRunResult(
                 success=result["status"] == "DONE",
-                command=("docker", "python", "-m", "unittest", test_modules[0]),
+                command=(provider, "python", "-m", "unittest", test_modules[0]),
                 returncode=result.get("exit_code", 2),
                 stdout=stdout.text,
                 stderr=stderr.text,
