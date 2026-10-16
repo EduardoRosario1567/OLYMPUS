@@ -1,0 +1,33 @@
+name: OLYMPUS Consolidation - Static Artifacts
+on:
+  push:
+    branches:
+      - olympus-consolidacao-unica-20261016
+    paths:
+      - scripts/verificar_entrega_estatica.py
+      - scripts/preserve_static_delivery.py
+      - scripts/rosales_real_readiness.py
+      - tests/test_static_delivery_gate.py
+      - tests/test_preserve_static_delivery.py
+      - tests/test_rosales_real_readiness.py
+      - missions/rosales-cafe-acceptance.md
+      - .github/workflows/consolidation-static-artifacts.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check static source syntax
+        run: python -m py_compile scripts/verificar_entrega_estatica.py scripts/preserve_static_delivery.py scripts/rosales_real_readiness.py
+      - name: Static verifier, preservation and Rosales readiness regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
+          python -m unittest discover -s tests -p 'test_preserve_static_delivery.py' -v
+          python -m unittest discover -s tests -p 'test_rosales_real_readiness.py' -v
