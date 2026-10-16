@@ -154,7 +154,11 @@ class TestProviderFailoverV210(unittest.TestCase):
         from app.core.provider_runtime import configured_mission_routes
         registry = ProviderRegistry()
         registry.register("omniroute", LiveOmniRoute(), 10)
-        with patch.dict(os.environ, {"OLYMPUS_FREE_FALLBACK_PROVIDERS":""}, clear=True):
+        # Catalog ordering is tested independently of runtime capacity telemetry.
+        # Separate tests exercise capacity-based exclusions.
+        with patch("app.core.provider_runtime.capacity_filter_routes", side_effect=lambda routes: routes), \
+             patch("app.core.provider_runtime._omniroute_pool_status", return_value={}), \
+             patch.dict(os.environ, {"OLYMPUS_FREE_FALLBACK_PROVIDERS":""}, clear=True):
             ids = tuple(route.id for route in configured_mission_routes(registry))
         self.assertEqual(ids[0], "Conding-free")
         self.assertEqual(set(ids[1:]), {"openrouter/openrouter/free", "openrouter/openai/gpt-oss-20b:free", "cohere/north-mini-code:free", "nvidia/nemotron-3-super-120b:free"})

@@ -104,6 +104,7 @@ def _runner_factory(workspace: str, telemetry):
     )
     return AutonomousDeveloper(
         root=workspace,
+        isolated_tests=os.environ.get('OLYMPUS_ISOLATED_AGENT_TESTS') == '1',
         router=router_adapter,
         selector=selector,
         telemetry=telemetry,

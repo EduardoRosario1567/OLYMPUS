@@ -1,0 +1,33 @@
+name: Static Delivery Gate
+on:
+  push:
+    branches: [olympus-static-delivery-safe-v1]
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/test_*static_delivery*.py'
+      - 'tests/test_static_mission_contract.py'
+      - 'backend/app/api/missions.py'
+      - '.github/workflows/static-delivery-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      # Requalification after GitHub account email verification.
+      - name: Compile static delivery modules
+        run: python -m py_compile scripts/verificar_entrega_estatica.py scripts/preserve_static_delivery.py backend/app/api/missions.py
+      - name: Run static gate and preservation tests
+        run: |
+          python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
+          python -m unittest discover -s tests -p 'test_preserve_static_delivery.py' -v
+          python -m unittest discover -s tests -p 'test_static_mission_contract.py' -v

@@ -26,12 +26,12 @@ class ActionExecutor:
         "attachments/", "imports/", "index.html", "README.md", "package.json",
     )
 
-    def __init__(self, root: str, allowed_paths=DEFAULT_ALLOWED_PATHS, autonomy_policy=None) -> None:
+    def __init__(self, root: str, allowed_paths=DEFAULT_ALLOWED_PATHS, autonomy_policy=None, isolated_tests=False) -> None:
         self.root = Path(root).resolve()
         self.allowed_paths = tuple(allowed_paths)
         self.autonomy = autonomy_policy or AutonomyPolicy()
         self.patch_engine = PatchEngine(str(self.root), self.allowed_paths)
-        self.test_runner = TargetedTestRunner(str(self.root))
+        self.test_runner = TargetedTestRunner(str(self.root), isolated=isolated_tests)
 
     def _safe_path(self, relative: str) -> Path:
         path = (self.root / relative).resolve()

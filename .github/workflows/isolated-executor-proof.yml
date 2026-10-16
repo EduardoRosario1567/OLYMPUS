@@ -1,0 +1,79 @@
+name: Isolated Executor Proof
+
+on:
+  push:
+    branches: [olympus-static-delivery-safe-v1]
+    paths:
+      - scripts/isolated_unittest_runner.py
+      - .github/workflows/isolated-executor-proof.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-isolation-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download fixed Python image
+        run: docker pull python:3.11.11-slim-bookworm
+      - name: Prove bounded sandbox executes an approved fixture
+        run: |
+          mkdir -p /tmp/olympus-isolation-proof/tests
+          printf '' > /tmp/olympus-isolation-proof/tests/__init__.py
+          cat > /tmp/olympus-isolation-proof/tests/test_sandbox.py <<'PY'
+          import os
+          import unittest
+          from pathlib import Path
+
+          class SandboxProof(unittest.TestCase):
+              def test_no_network_and_readonly_files(self):
+                  self.assertFalse(Path('/work/write-attempt').exists())
+                  with self.assertRaises(OSError):
+                      Path('/work/write-attempt').write_text('blocked')
+                  self.assertNotIn('GITHUB_TOKEN', os.environ)
+                  self.assertEqual(os.geteuid(), 65534)
+                  self.assertEqual(Path('/proc/self/status').read_text().split('CapEff:')[1].splitlines()[0].strip(), '0000000000000000')
+          PY
+          python scripts/isolated_unittest_runner.py /tmp/olympus-isolation-proof tests.test_sandbox
+      - name: Prove actual agent RUN_TEST action executes in isolated Docker
+        run: |
+          PYTHONPATH=. python - <<'PY'
+          import tempfile
+          from pathlib import Path
+          from olympus.agent.actions import AgentAction, ActionType
+          from olympus.agent.executor import ActionExecutor
+
+          with tempfile.TemporaryDirectory(prefix="olympus-agent-proof-") as root:
+              tests = Path(root, "tests")
+              tests.mkdir()
+              (tests / "__init__.py").write_text("")
+              (tests / "test_isolation.py").write_text(
+                  "import os, unittest\n"
+                  "from pathlib import Path\n"
+                  "class Proof(unittest.TestCase):\n"
+                  "    def test_restrictions(self):\n"
+                  "        self.assertEqual(os.geteuid(), 65534)\n"
+                  "        with self.assertRaises(OSError):\n"
+                  "            Path('/work/escape').write_text('fail')\n"
+              )
+              Path(root).chmod(0o755)
+              tests.chmod(0o755)
+              agent = ActionExecutor(root, isolated_tests=True)
+              action = AgentAction(ActionType.RUN_TEST, "tests.test_isolation", ["tests.test_isolation"])
+              result = agent.execute(action)
+              assert result.success, (result.error, result.output)
+              assert result.output.success
+              print("AGENT_DOCKER_ISOLATION_PROOF_OK")
+          PY
+      - name: Prove invalid module is rejected
+        run: |
+          if python scripts/isolated_unittest_runner.py /tmp/olympus-isolation-proof 'tests.test_sandbox;touch /tmp/unsafe'; then
+            echo "ERROR: unsafe module was accepted"
+            exit 1
+          fi

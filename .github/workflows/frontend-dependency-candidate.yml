@@ -1,0 +1,52 @@
+name: Frontend Dependency Remediation Candidate
+
+on:
+  push:
+    branches: [olympus-static-delivery-safe-v1]
+    paths:
+      - ".github/workflows/frontend-dependency-candidate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Generate updated dependency candidate
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --save-exact next@16.4.1
+          npm install --save-dev --save-exact tailwindcss@4.3.3 @tailwindcss/postcss
+          npm audit fix
+          printf "module.exports = { plugins: { '@tailwindcss/postcss': {} } };\n" > postcss.config.js
+          python3 - <<'PY'
+          from pathlib import Path
+          css = Path('app/globals.css')
+          contents = css.read_text()
+          before = '@tailwind base;\n@tailwind components;\n@tailwind utilities;'
+          assert contents.startswith(before), 'Tailwind entry CSS unexpectedly changed'
+          css.write_text(contents.replace(before, '@import "tailwindcss";\n@config "../tailwind.config.ts";', 1))
+          PY
+      - name: Check candidate and capture audit results
+        working-directory: frontend
+        run: |
+          npm run build
+          npm audit --audit-level=high
+      - name: Preserve generated manifest and lock for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dependency-candidate
+          path: |
+            frontend/package.json
+            frontend/package-lock.json
+            frontend/postcss.config.js
+            frontend/app/globals.css
+          if-no-files-found: error

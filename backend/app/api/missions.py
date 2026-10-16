@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from olympus.agent.mission import AutonomousPatchRunner, MissionSpec, MissionStep
 from olympus.routing.omniroute_adapter import OmniRouteAdapter
+from scripts.preserve_static_delivery import preserve_validated_site
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/missions", tags=["missions"])
 class MissionCreate(BaseModel):
     task: str = Field(min_length=3, max_length=12000)
     max_iterations: int = Field(default=24, ge=1, le=24)
+    static_delivery: bool = False
 
 
 class MissionView(BaseModel):
@@ -33,6 +35,7 @@ class MissionView(BaseModel):
     tests_run: List[str] = []
     confidence: Optional[float] = None
     error: Optional[str] = None
+    delivery_available: bool = False
 
 
 _LOCK = threading.Lock()
@@ -69,7 +72,7 @@ def _seed_workspace(root: Path) -> None:
     (root / "app" / "__init__.py").write_text("", encoding="utf-8")
     (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
     (root / "README.md").write_text(
-        "# OLYMPUS Web Tester Sandbox\n\nThis workspace is disposable and isolated.\n",
+        "# OLYMPUS Temporary Workspace\n\nThis folder is disposable; OS-level isolation is NOT verified.\n",
         encoding="utf-8",
     )
 
@@ -79,18 +82,30 @@ def _run_mission(mission_id: str) -> None:
         rec = _MISSIONS[mission_id]
         task = rec["task"]
         max_iterations = rec["_max_iterations"]
+        static_delivery = rec.get("_static_delivery", False)
         rec["status"] = "running"
         rec["updated_at"] = _now()
 
     workspace = Path(tempfile.mkdtemp(prefix="olympus-web-"))
     try:
         _seed_workspace(workspace)
-        _event(mission_id, "mission_start", isolated=True)
+        _event(mission_id, "mission_start", temporary_workspace=True, os_sandbox_verified=False)
         router_adapter = OmniRouteAdapter(
             base_url=os.environ.get("OLYMPUS_OMNIROUTE_URL", "http://127.0.0.1:20128"),
             api_key=(os.environ.get("OLYMPUS_OMNIROUTE_API_KEY") or os.environ.get("OMNIROUTE_API_KEY") or None),
             timeout_seconds=int(os.environ.get("OLYMPUS_MODEL_TIMEOUT", "30")),
         )
+        if static_delivery:
+            task = (
+                "STATIC WEBSITE DELIVERY CONTRACT (mandatory):\n"
+                "Create a complete standalone site in site/index.html relative to your workspace root.\n"
+                "Put CSS, JavaScript, images and other assets only within site/.\n"
+                "Use local, relative asset paths; do not reference external scripts, styles, fonts, images or embeds.\n"
+                "Never write outside the disposable workspace.\n"
+                "Do not claim completion until site/index.html exists and required assets are present.\n"
+                "The OLYMPUS delivery gate checks file safety separately; report any limitation accurately.\n\n"
+                "USER REQUEST:\n" + task
+            )
         spec = MissionSpec(
             mission_id,
             "Web Tester Mission",
@@ -114,16 +129,27 @@ def _run_mission(mission_id: str) -> None:
             for name in state.tests_run:
                 if name not in tests:
                     tests.append(name)
+        delivery_error = None
+        delivery_available = False
+        if static_delivery and result.success:
+            try:
+                # Only the explicitly requested static workflow uses this gate.
+                delivery_root = os.environ.get("OLYMPUS_STATIC_DELIVERY_ROOT") or str(Path.home() / ".olympus" / "deliveries")
+                preserve_validated_site(workspace, delivery_root, mission_id)
+                delivery_available = True
+            except (ValueError, FileExistsError, OSError) as exc:
+                delivery_error = str(exc)
         with _LOCK:
             rec = _MISSIONS[mission_id]
-            rec["status"] = "completed" if result.success else result.status
+            rec["status"] = "failed" if delivery_error else ("completed" if result.success else result.status)
             rec["models"] = models or rec["models"]
             rec["files_modified"] = files
             rec["tests_run"] = tests
-            rec["confidence"] = 1.0 if result.success else 0.0
-            rec["error"] = result.error
+            rec["confidence"] = 1.0 if result.success and not delivery_error else 0.0
+            rec["error"] = delivery_error or result.error
+            rec["delivery_available"] = delivery_available
             rec["updated_at"] = _now()
-        _event(mission_id, "mission_end", status=result.status)
+        _event(mission_id, "mission_end", status="failed" if delivery_error else result.status, delivery_available=delivery_available)
     except Exception as exc:
         with _LOCK:
             rec = _MISSIONS[mission_id]
@@ -137,6 +163,13 @@ def _run_mission(mission_id: str) -> None:
 
 @router.post("", response_model=MissionView, status_code=202)
 def create_mission(payload: MissionCreate):
+    if payload.static_delivery:
+        # No verified OS-level sandbox is wired to this legacy runner.
+        # Reject before creating a thread or contacting a model provider.
+        raise HTTPException(
+            status_code=503,
+            detail="BLOCKED: entrega estática exige isolamento de execução comprovado; nenhum provedor foi acionado.",
+        )
     mission_id = uuid.uuid4().hex[:12]
     now = _now()
     record = {
@@ -150,7 +183,9 @@ def create_mission(payload: MissionCreate):
         "tests_run": [],
         "confidence": None,
         "error": None,
+        "delivery_available": False,
         "events": [],
+        "_static_delivery": payload.static_delivery,
         "_max_iterations": payload.max_iterations,
     }
     with _LOCK:

@@ -29,6 +29,7 @@ class PreviewSession:
     tenant_id: str
     entrypoint: str
     expires_at: float
+    artifact_root: Optional[str] = None
 
 
 class ProjectPreviewSessions:
@@ -41,7 +42,7 @@ class ProjectPreviewSessions:
         self._lock = Lock()
 
     @staticmethod
-    def _safe_relative(value: str) -> Path:
+    def _safe_relative(value: str, allow_data: bool = False) -> Path:
         relative = PurePosixPath((value or "").lstrip("/"))
         if (
             relative.is_absolute()
@@ -52,7 +53,9 @@ class ProjectPreviewSessions:
         ):
             raise ValueError("unsafe preview path")
         path = Path(*relative.parts)
-        if path.suffix.lower() not in PREVIEW_EXTENSIONS:
+        if path.suffix.lower() not in PREVIEW_EXTENSIONS and not (
+            allow_data and path.suffix.lower() in {".json", ".txt"}
+        ):
             raise ValueError("file type is not available in preview")
         return path
 
@@ -86,17 +89,92 @@ class ProjectPreviewSessions:
             self._sessions[session.token] = session
         return session
 
+    def create_verified_artifact(self, project_id: str, build_id: str, tenant_id: str = "local") -> PreviewSession:
+        """Capability preview for SHA-256 verified private remote build output.
+
+        The caller supplies a build ID, never an arbitrary path. Tenant project
+        ownership is always checked, even when preview sessions are resolved.
+        """
+        from hashlib import sha256
+        import json
+        from scripts.verificar_entrega_estatica import verify
+
+        if (not build_id or len(build_id) > 100 or not build_id.isascii()
+                or not all(ch.isalnum() or ch in "-_" for ch in build_id)):
+            raise ValueError("invalid build ID")
+        root = self.projects.project_root(project_id, tenant_id=tenant_id)
+        if root.is_symlink():
+            raise ValueError("project symlink not allowed")
+        root = root.resolve(strict=True)
+        part = root
+        for component in (".olympus", "web_builds", build_id, "site"):
+            part = part / component
+            if part.is_symlink():
+                raise ValueError("linked preview artifact not allowed")
+        site = part.resolve(strict=True)
+        site.relative_to(root)
+        manifest = site.parent / "manifest.json"
+        if manifest.is_symlink() or not manifest.is_file():
+            raise ValueError("verified artifact manifest missing")
+        info = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(info, dict) or info.get("status") != "DONE" or info.get("mission_id") != build_id:
+            raise ValueError("invalid artifact manifest")
+        issues, count = verify(str(site), str(root))
+        if issues or not count:
+            raise ValueError("invalid artifact files")
+        entries = info.get("files")
+        if not isinstance(entries, list) or len(entries) != count:
+            raise ValueError("artifact manifest count mismatch")
+        seen = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError("invalid artifact manifest entry")
+            name = entry.get("path")
+            if not isinstance(name, str) or name in seen:
+                raise ValueError("duplicate or missing artifact entry")
+            seen.add(name)
+            file = self._resolve_asset(site, name, allow_data=True)
+            raw = file.read_bytes()
+            if len(raw) != entry.get("size_bytes") or sha256(raw).hexdigest() != entry.get("sha256"):
+                raise ValueError("artifact digest mismatch")
+        if not (site / "index.html").is_file():
+            raise ValueError("artifact index missing")
+        now = time.time()
+        session = PreviewSession(
+            secrets.token_urlsafe(32), project_id, tenant_id, "index.html",
+            now + self.ttl_seconds, str(site),
+        )
+        with self._lock:
+            self._sessions = {token: item for token, item in self._sessions.items() if item.expires_at > now}
+            self._sessions[session.token] = session
+        return session
+
     def resolve(self, token: str, asset_path: Optional[str] = None) -> tuple[PreviewSession, Path]:
         with self._lock:
             session = self._sessions.get(token)
         if session is None or session.expires_at <= time.time():
             raise KeyError("preview session expired")
-        root = self.projects.project_root(session.project_id, tenant_id=session.tenant_id)
-        candidate = self._resolve_asset(root, asset_path or session.entrypoint)
+        # Recheck tenant ownership, even for artifact-backed capability URLs.
+        self.projects.project_root(session.project_id, tenant_id=session.tenant_id)
+        root = Path(session.artifact_root) if session.artifact_root else self.projects.project_root(
+            session.project_id, tenant_id=session.tenant_id
+        )
+        candidate = self._resolve_asset(root, asset_path or session.entrypoint, allow_data=bool(session.artifact_root))
+        if session.artifact_root:
+            import json
+            from hashlib import sha256
+            info = json.loads((root.parent / "manifest.json").read_text(encoding="utf-8"))
+            relative = candidate.relative_to(root).as_posix()
+            records = info.get("files", []) if isinstance(info, dict) else []
+            matches = [record for record in records
+                       if isinstance(record, dict) and record.get("path") == relative]
+            if (len(matches) != 1 or candidate.stat().st_size != matches[0].get("size_bytes")
+                    or sha256(candidate.read_bytes()).hexdigest() != matches[0].get("sha256")):
+                raise ValueError("verified preview artifact changed")
         return session, candidate
 
-    def _resolve_asset(self, root: Path, asset_path: str) -> Path:
-        relative = self._safe_relative(asset_path)
+    def _resolve_asset(self, root: Path, asset_path: str, allow_data: bool = False) -> Path:
+        relative = self._safe_relative(asset_path, allow_data=allow_data)
         if root.is_symlink():
             raise ValueError("linked preview root is not allowed")
         root = root.resolve()
@@ -109,7 +187,7 @@ class ProjectPreviewSessions:
         try:
             resolved = candidate.resolve(strict=True)
             final_relative = resolved.relative_to(root)
-            self._safe_relative(final_relative.as_posix())
+            self._safe_relative(final_relative.as_posix(), allow_data=allow_data)
             if not resolved.is_file() or resolved.stat().st_size > MAX_PREVIEW_FILE_BYTES:
                 raise KeyError("preview file not found")
         except OSError as exc:
