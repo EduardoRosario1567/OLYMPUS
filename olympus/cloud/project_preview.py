@@ -15,7 +15,7 @@ from .project_studio import ProjectRuntimeManager
 PREVIEW_EXTENSIONS = {
     ".html", ".htm", ".css", ".js", ".mjs",
     ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico",
-    ".woff", ".woff2", ".ttf", ".mp4", ".webm",
+    ".woff", ".woff2", ".ttf", ".mp4", ".webm", ".json", ".txt",
 }
 ENTRYPOINTS = ("index.html", "app/index.html", "public/index.html", "dist/index.html", "build/index.html")
 MAX_PREVIEW_FILE_BYTES = 10 * 1024 * 1024
@@ -115,7 +115,7 @@ class ProjectPreviewSessions:
         if manifest.is_symlink() or not manifest.is_file():
             raise ValueError("verified artifact manifest missing")
         info = json.loads(manifest.read_text(encoding="utf-8"))
-        if info.get("status") != "DONE" or info.get("mission_id") != build_id:
+        if not isinstance(info, dict) or info.get("status") != "DONE" or info.get("mission_id") != build_id:
             raise ValueError("invalid artifact manifest")
         issues, count = verify(str(site), str(root))
         if issues or not count:
@@ -158,6 +158,17 @@ class ProjectPreviewSessions:
             session.project_id, tenant_id=session.tenant_id
         )
         candidate = self._resolve_asset(root, asset_path or session.entrypoint)
+        if session.artifact_root:
+            import json
+            from hashlib import sha256
+            info = json.loads((root.parent / "manifest.json").read_text(encoding="utf-8"))
+            relative = candidate.relative_to(root).as_posix()
+            records = info.get("files", []) if isinstance(info, dict) else []
+            matches = [record for record in records
+                       if isinstance(record, dict) and record.get("path") == relative]
+            if (len(matches) != 1 or candidate.stat().st_size != matches[0].get("size_bytes")
+                    or sha256(candidate.read_bytes()).hexdigest() != matches[0].get("sha256")):
+                raise ValueError("verified preview artifact changed")
         return session, candidate
 
     def _resolve_asset(self, root: Path, asset_path: str) -> Path:
