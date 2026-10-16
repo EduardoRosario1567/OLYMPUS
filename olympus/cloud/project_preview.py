@@ -15,7 +15,7 @@ from .project_studio import ProjectRuntimeManager
 PREVIEW_EXTENSIONS = {
     ".html", ".htm", ".css", ".js", ".mjs",
     ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico",
-    ".woff", ".woff2", ".ttf", ".mp4", ".webm", ".json", ".txt",
+    ".woff", ".woff2", ".ttf", ".mp4", ".webm",
 }
 ENTRYPOINTS = ("index.html", "app/index.html", "public/index.html", "dist/index.html", "build/index.html")
 MAX_PREVIEW_FILE_BYTES = 10 * 1024 * 1024
@@ -42,7 +42,7 @@ class ProjectPreviewSessions:
         self._lock = Lock()
 
     @staticmethod
-    def _safe_relative(value: str) -> Path:
+    def _safe_relative(value: str, allow_data: bool = False) -> Path:
         relative = PurePosixPath((value or "").lstrip("/"))
         if (
             relative.is_absolute()
@@ -53,7 +53,9 @@ class ProjectPreviewSessions:
         ):
             raise ValueError("unsafe preview path")
         path = Path(*relative.parts)
-        if path.suffix.lower() not in PREVIEW_EXTENSIONS:
+        if path.suffix.lower() not in PREVIEW_EXTENSIONS and not (
+            allow_data and path.suffix.lower() in {".json", ".txt"}
+        ):
             raise ValueError("file type is not available in preview")
         return path
 
@@ -131,7 +133,7 @@ class ProjectPreviewSessions:
             if not isinstance(name, str) or name in seen:
                 raise ValueError("duplicate or missing artifact entry")
             seen.add(name)
-            file = self._resolve_asset(site, name)
+            file = self._resolve_asset(site, name, allow_data=True)
             raw = file.read_bytes()
             if len(raw) != entry.get("size_bytes") or sha256(raw).hexdigest() != entry.get("sha256"):
                 raise ValueError("artifact digest mismatch")
@@ -157,7 +159,7 @@ class ProjectPreviewSessions:
         root = Path(session.artifact_root) if session.artifact_root else self.projects.project_root(
             session.project_id, tenant_id=session.tenant_id
         )
-        candidate = self._resolve_asset(root, asset_path or session.entrypoint)
+        candidate = self._resolve_asset(root, asset_path or session.entrypoint, allow_data=bool(session.artifact_root))
         if session.artifact_root:
             import json
             from hashlib import sha256
@@ -171,8 +173,8 @@ class ProjectPreviewSessions:
                 raise ValueError("verified preview artifact changed")
         return session, candidate
 
-    def _resolve_asset(self, root: Path, asset_path: str) -> Path:
-        relative = self._safe_relative(asset_path)
+    def _resolve_asset(self, root: Path, asset_path: str, allow_data: bool = False) -> Path:
+        relative = self._safe_relative(asset_path, allow_data=allow_data)
         if root.is_symlink():
             raise ValueError("linked preview root is not allowed")
         root = root.resolve()
@@ -185,7 +187,7 @@ class ProjectPreviewSessions:
         try:
             resolved = candidate.resolve(strict=True)
             final_relative = resolved.relative_to(root)
-            self._safe_relative(final_relative.as_posix())
+            self._safe_relative(final_relative.as_posix(), allow_data=allow_data)
             if not resolved.is_file() or resolved.stat().st_size > MAX_PREVIEW_FILE_BYTES:
                 raise KeyError("preview file not found")
         except OSError as exc:
