@@ -55,3 +55,39 @@ quota, and acceptance evidence are provided.
    with versioned artifacts and no global mutable active-sandbox state.
 4. Prove real-model generation of Rosales Café, static validation, visual
    browser QA and preservation, with a signed DONE/BLOCKED manifest.
+
+## Remote web build prototype (2026-10-16)
+
+Implemented in `scripts/remote_e2b_web_build.py`, separately from
+the original Python unittest adapter. It accepts a curated static site
+(`workspace/site/index.html`) or a React/Vite project at the workspace
+root (`package.json` + `package-lock.json`, with `"build": "vite build"`).
+
+The opt-in Python entrypoint is
+`build_and_preserve(workspace, mode, delivery_root, mission_id)`.
+It transfers only the limited source types, requests an E2B sandbox
+with non-public incoming traffic, installs React dependencies only
+when `OLYMPUS_REMOTE_BUILD_NETWORK_AUTHORIZED=1`, builds, downloads
+a bounded ZIP and calls the existing OLYMPUS static delivery gate and
+SHA-256 manifest preservation. The result is `BUILD_VERIFIED`, **never
+the complete mission DONE**.
+
+This output is stored privately with its manifest. The current cloud
+project preview session mechanism is a separate service; importing the
+artifact into a tenant-owned project and exposing a verified, short-lived
+preview URL is **not implemented by this adapter**.
+
+No external E2B call has been authorized/performed in CI. The tests
+exercise the lifecycle, build-command wiring, source filters, ZIP
+validation and persistence with a fake E2B backend; the existing
+Docker test validates isolated Python action execution separately.
+The React package installation and Vite compilation are not yet
+proven against a live E2B environment.
+
+Operating safeguards: server-side explicit authorization and service key
+are mandatory; React outbound dependency download has a separate opt-in.
+These environment flags **are not a substitute for per-user budgets and
+tenant accounting**, so do not expose this entrypoint to end users until
+the authenticated, tenant-scoped controller and quota enforcement exist.
+Never upload a workspace containing secrets embedded in source code;
+filename filtering alone cannot detect all secrets.
