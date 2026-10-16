@@ -14,6 +14,8 @@ on:
       - olympus/agent/test_runner.py
       - olympus/agent/static_site_executor.py
       - tests/test_static_site_executor.py
+      - olympus/agent/static_site_pipeline.py
+      - tests/test_static_site_pipeline.py
       - tests/test_e2b_consolidation_guard.py
       - tests/test_static_delivery_gate.py
       - tests/test_preserve_static_delivery.py
@@ -60,3 +62,9 @@ jobs:
         env:
           PYTHONPATH: .:backend
         run: python -m unittest discover -s tests -p 'test_consolidation_static_mission_guard.py' -v
+      - name: Scripted agent end-to-end static candidate (no paid model, no browser)
+        env:
+          PYTHONPATH: .:backend
+        run: |
+          python -m py_compile olympus/agent/static_site_pipeline.py
+          python -m unittest discover -s tests -p 'test_static_site_pipeline.py' -v
