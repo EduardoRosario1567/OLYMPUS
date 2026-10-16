@@ -72,10 +72,16 @@ a bounded ZIP and calls the existing OLYMPUS static delivery gate and
 SHA-256 manifest preservation. The result is `BUILD_VERIFIED`, **never
 the complete mission DONE**.
 
-This output is stored privately with its manifest. The current cloud
-project preview session mechanism is a separate service; importing the
-artifact into a tenant-owned project and exposing a verified, short-lived
-preview URL is **not implemented by this adapter**.
+This output is stored privately with its manifest. A tenant-scoped
+verified preview **is now available** through
+`POST /cloud/projects/{project_id}/builds/{build_id}/preview-session`,
+provided the build is preserved under the authenticated project's
+`.olympus/web_builds/{build_id}/site/` with an authentic `manifest.json`.
+The preview URL uses an expiring capability token, never starts Vite on
+the host, and SHA-256-verifies each requested file again. This is
+separate from the E2B build invocation: an authenticated remote-build
+controller with per-tenant spending quotas still needs to be integrated
+before users can trigger paid remote builds via the UI.
 
 No external E2B call has been authorized/performed in CI. The tests
 exercise the lifecycle, build-command wiring, source filters, ZIP
