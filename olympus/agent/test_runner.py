@@ -41,7 +41,15 @@ class TargetedTestRunner:
         if not test_modules:
             raise ValueError("at least one test module is required")
 
+        # Trusted backend configuration; default remains the verified local
+        # ContainerExecutor. An unknown provider NEVER falls back to host.
+        provider = os.environ.get("OLYMPUS_ISOLATED_TEST_PROVIDER", "docker").strip().lower()
+        if provider not in {"docker", "e2b"}:
+            raise ValueError("BLOCKED: unsupported isolated test provider")
+
         if len(test_modules) == 1 and test_modules[0].startswith("shell:"):
+            if provider != "docker":
+                raise ValueError("BLOCKED: shell checks require local container")
             target = test_modules[0][len("shell:"):]
 
             if (
@@ -79,6 +87,23 @@ class TargetedTestRunner:
                 raise ValueError(
                     "unsafe test module: %s" % module
                 )
+
+        if provider == "e2b":
+            # Explicit opt-in and authorization are checked again at the
+            # remote boundary, BEFORE any sandbox is created or charged.
+            if self.cwd is None:
+                raise ValueError("BLOCKED: remote test requires a workspace")
+            if len(test_modules) != 1:
+                raise ValueError("BLOCKED: remote tests require exactly one module")
+            from scripts.remote_e2b_unittest_runner import execute
+            report = execute(self.cwd, test_modules[0], timeout=timeout_seconds)
+            return TestRunResult(
+                success=report.get("status") == "DONE" and report.get("exit_code") == 0,
+                command=("e2b", "python3", "-m", "unittest", test_modules[0]),
+                returncode=report.get("exit_code", 125),
+                stdout=compact_output(report.get("stdout") or "").text,
+                stderr=compact_output(report.get("stderr") or report.get("reason") or "").text,
+            )
 
         command = (
             sys.executable,
