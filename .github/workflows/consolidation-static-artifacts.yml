@@ -4,6 +4,8 @@ on:
     branches:
       - olympus-consolidacao-unica-20261016
     paths:
+      - backend/app/api/missions.py
+      - tests/test_consolidation_static_mission_guard.py
       - scripts/verificar_entrega_estatica.py
       - scripts/preserve_static_delivery.py
       - scripts/rosales_real_readiness.py
@@ -35,3 +37,17 @@ jobs:
           python -m unittest discover -s tests -p 'test_rosales_real_readiness.py' -v
       - name: Remote web build boundary with fake sandbox
         run: python -m unittest discover -s tests -p 'test_remote_e2b_web_build.py' -v
+  mission-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies for a real API import
+        run: pip install -r requirements-core.txt -r backend/requirements.txt
+      - name: Static mission must fail closed before execution
+        env:
+          PYTHONPATH: .:backend
+        run: python -m unittest discover -s tests -p 'test_consolidation_static_mission_guard.py' -v
