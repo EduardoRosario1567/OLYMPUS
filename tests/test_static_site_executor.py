@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 
 from olympus.agent.actions import ActionType, AgentAction
-from olympus.agent.static_site_executor import StaticSiteActionExecutor
+from olympus.agent.static_site_executor import StaticSiteActionExecutor, static_site_loop_factory
+from unittest.mock import patch
 
 
 class StaticSiteActionExecutorTests(unittest.TestCase):
@@ -75,6 +76,20 @@ class StaticSiteActionExecutorTests(unittest.TestCase):
         self.assertFalse(self.action(ActionType.PATCH_FILE, "site/index.html", {
             "operation": "append_block", "new_content": "x" * (512 * 1024 + 1),
         }).success)
+
+    def test_model_loop_factory_cannot_execute_generated_tests(self):
+        verifier = object()
+        loop = static_site_loop_factory(lambda root: verifier)(str(self.root), object())
+        self.assertIsInstance(loop.executor, StaticSiteActionExecutor)
+        self.assertIs(loop.verifier, verifier)
+        with patch.object(loop.executor.test_runner, "run_unittest",
+                          side_effect=AssertionError("model code executed")) as unsafe:
+            action = AgentAction(ActionType.RUN_TEST, target="tests.test_generated",
+                                 payload=["tests.test_generated"])
+            response = loop.executor.execute(action)
+        self.assertFalse(response.success)
+        self.assertIn("BLOCKED", response.error)
+        unsafe.assert_not_called()
 
     def test_finish_does_not_mean_site_was_validated(self):
         result = self.action(ActionType.FINISH, payload="Site complete")

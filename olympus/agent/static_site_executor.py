@@ -92,3 +92,22 @@ class StaticSiteActionExecutor(ActionExecutor):
                 metadata={"static_site_policy": "blocked"},
             )
         return super().execute(action)
+
+
+
+def static_site_loop_factory(verifier_factory):
+    """Bind the static-only boundary to every model attempt in a mission.
+
+    The caller still owns authorization, provider costs, deterministic artifact
+    preservation and browser review; this is not a release gate by itself.
+    """
+    def create_loop(root, planner):
+        from olympus.agent.loop import AgentLoop
+        return AgentLoop(
+            root,
+            planner,
+            executor=StaticSiteActionExecutor(root),
+            verifier=verifier_factory(root),
+        )
+
+    return create_loop
