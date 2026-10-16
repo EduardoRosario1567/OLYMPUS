@@ -12,6 +12,8 @@ on:
       - scripts/remote_e2b_web_build.py
       - scripts/remote_e2b_unittest_runner.py
       - olympus/agent/test_runner.py
+      - olympus/agent/static_site_executor.py
+      - tests/test_static_site_executor.py
       - tests/test_e2b_consolidation_guard.py
       - tests/test_static_delivery_gate.py
       - tests/test_preserve_static_delivery.py
@@ -32,12 +34,14 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check static source syntax
-        run: python -m py_compile scripts/verificar_entrega_estatica.py scripts/preserve_static_delivery.py scripts/rosales_real_readiness.py scripts/remote_e2b_web_build.py scripts/remote_e2b_unittest_runner.py olympus/agent/test_runner.py
+        run: python -m py_compile scripts/verificar_entrega_estatica.py scripts/preserve_static_delivery.py scripts/rosales_real_readiness.py scripts/remote_e2b_web_build.py scripts/remote_e2b_unittest_runner.py olympus/agent/test_runner.py olympus/agent/static_site_executor.py
       - name: Static verifier, preservation and Rosales readiness regressions
         run: |
           python -m unittest discover -s tests -p 'test_static_delivery_gate.py' -v
           python -m unittest discover -s tests -p 'test_preserve_static_delivery.py' -v
           python -m unittest discover -s tests -p 'test_rosales_real_readiness.py' -v
+      - name: Restricted static site action boundary
+        run: python -m unittest discover -s tests -p 'test_static_site_executor.py' -v
       - name: Remote web build boundary with fake sandbox
         run: python -m unittest discover -s tests -p 'test_remote_e2b_web_build.py' -v
       - name: Verify Docker remains default and E2B opt-in fails closed
