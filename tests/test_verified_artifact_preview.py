@@ -34,6 +34,7 @@ class VerifiedArtifactPreviewTests(unittest.TestCase):
         )
         (self.workspace / "site" / "assets").mkdir()
         (self.workspace / "site" / "assets" / "style.css").write_text("body{color:#432b1a}")
+        (self.workspace / "site" / "assets" / "config.json").write_text('{"theme":"coffee"}')
         self.build_id = "rosales-verifiable-1"
         preserve_validated_site(
             self.workspace, self.project_root / ".olympus" / "web_builds", self.build_id
@@ -49,6 +50,8 @@ class VerifiedArtifactPreviewTests(unittest.TestCase):
         self.assertEqual(path.name, "index.html")
         _, css = self.preview.resolve(session.token, "assets/style.css")
         self.assertEqual(css.read_text(), "body{color:#432b1a}")
+        _, data = self.preview.resolve(session.token, "assets/config.json")
+        self.assertIn("coffee", data.read_text())
         html = self.preview.rewrite_text(session.token, ".html", path.read_text())
         self.assertIn("/cloud/projects/_preview/" + session.token + "/assets/style.css", html)
 
