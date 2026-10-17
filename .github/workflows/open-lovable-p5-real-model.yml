@@ -65,10 +65,10 @@ jobs:
           docker pull ollama/ollama:latest
           docker image inspect ollama/ollama:latest --format '{{.Id}}' > "$OUT/ollama-image-id.txt"
           docker run -d --name "$MODEL" --network bridge \
-            --memory=4g --memory-swap=4g --cpus=2 --pids-limit=256 \
+            --memory=4g --memory-swap=4g --cpus=4 --pids-limit=256 \
             --cap-drop=ALL --security-opt=no-new-privileges \
             --env OLLAMA_NUM_PARALLEL=1 \
-            --env OLLAMA_CONTEXT_LENGTH=8192 \
+            --env OLLAMA_CONTEXT_LENGTH=4096 \
             ollama/ollama:latest >/dev/null
           ready=0
           for i in $(seq 1 50); do
@@ -136,12 +136,16 @@ jobs:
             node /app/p5_qualify_real_stream.mjs
           result=$?
           set -e
+          # docker cp cannot reliably inspect all tmpfs-backed paths on hosted runners.
+          # Stream evidence using docker exec, never expose provider keys.
           docker exec "$APP" sh -c 'ls -la /tmp/olympus-p5-results' || true
-          docker cp "$APP":/tmp/olympus-p5-results "$OUT/copied-results" || true
-          if [ -d "$OUT/copied-results" ]; then
-            cp -a "$OUT/copied-results"/. "$OUT"/
-          fi
+          docker exec "$APP" cat /tmp/olympus-p5-results/proof.json > "$OUT/proof.json" \
+            || rm -f "$OUT/proof.json"
+          docker exec "$APP" cat /tmp/olympus-p5-results/original-stream.txt > "$OUT/original-stream.txt" \
+            || rm -f "$OUT/original-stream.txt"
           docker logs --tail 50 "$APP" > "$OUT/original-app-logs.txt" 2>&1 || true
+          echo "Original application diagnostic, last 15 lines:"
+          tail -15 "$OUT/original-app-logs.txt" | cut -c1-350 || true
           python3 - "$OUT" <<'PY'
           import json, pathlib, sys
           proof=pathlib.Path(sys.argv[1])/'proof.json'
