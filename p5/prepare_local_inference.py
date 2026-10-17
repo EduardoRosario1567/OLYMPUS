@@ -58,11 +58,11 @@ def overlay(root: Path, *, git_check=True):
         raise Blocked('P5_TOKEN_LIMIT_SIGNATURE_CHANGED')
     text = text.replace("maxTokens: 8192,",
          "maxTokens: process.env.OLYMPUS_P5_LOCAL_ONLY === '1' ? 2048 : 8192,")
-    signature_reasoning = "// Add reasoning effort for GPT-5 models\\n        if (isOpenAI) {"
+    signature_reasoning = "// Add reasoning effort for GPT-5 models\n        if (isOpenAI) {"
     if text.count(signature_reasoning) != 1:
         raise Blocked('P5_OPENAI_METADATA_SIGNATURE_CHANGED')
     text = text.replace(signature_reasoning,
-        "// Add reasoning effort for GPT-5 models\\n        if (isOpenAI && process.env.OLYMPUS_P5_LOCAL_ONLY !== '1') {")
+        "// Add reasoning effort for GPT-5 models\n        if (isOpenAI && process.env.OLYMPUS_P5_LOCAL_ONLY !== '1') {")
     source.write_text(text, encoding='utf-8')
     (root/'middleware.ts').write_text(MIDDLEWARE,encoding='utf-8')
     return {"status":"GUARDED_LOCAL_INFERENCE_CANDIDATE","upstream_pin":PIN,
