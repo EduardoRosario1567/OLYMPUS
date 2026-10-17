@@ -102,21 +102,45 @@ jobs:
           test "$(docker inspect "$APP" -f '{{len .Mounts}}')" = 0
           test "$(docker inspect "$APP" -f '{{.HostConfig.Privileged}}')" = false
           test -z "$(docker inspect "$APP" -f '{{json .HostConfig.PortBindings}}' | grep -E '0\\.0\\.0\\.0|127\\.0\\.0\\.1' || true)"
+          # Require real Next readiness; never convert failed route checks into success.
+          ready=0
+          for i in $(seq 1 70); do
+            if docker exec "$APP" node -e '
+            (async()=>{
+              const resp=await fetch("http://127.0.0.1:3000/api/olympus-p3-proof",
+                {signal:AbortSignal.timeout(2500)});
+              if(!resp.ok)process.exit(2);
+              const data=await resp.json();
+              if(data.instanceId!=="olympus-p5-lab-one")process.exit(3);
+            })().catch(()=>process.exit(4));' >/dev/null 2>&1; then ready=1;break;fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            docker logs --tail=70 "$APP" || true
+            echo "BLOCKED: guarded original Open Lovable not ready"
+            exit 2
+          fi
           # Verify all original code-execution API routes stay DENIED without a gate token.
           docker exec "$APP" node -e '
           (async()=>{
             for(const p of ["/api/run-command-v2","/api/create-ai-sandbox-v2","/api/generate-ai-code-stream"]){
-              const resp=await fetch("http://127.0.0.1:3000"+p,{method:"POST"});
+              const resp=await fetch("http://127.0.0.1:3000"+p,
+                {method:"POST",signal:AbortSignal.timeout(5000)});
               if(resp.status!==503)process.exit(5);
             }
-          })().catch(()=>process.exit(6));' || echo "Cold-start route probe deferred to streamed HTTP proof"
+          })().catch(()=>process.exit(6));'
+          echo "PASS: original unsafe API routes denied and guarded server responded over HTTP"
           # Perform actual Ollama API inference, then call the ORIGINAL Open Lovable SSE endpoint.
           set +e
           docker exec --env "OLYMPUS_P5_GATE_TOKEN=$GATE_TOKEN" "$APP" \
             node /app/p5_qualify_real_stream.mjs
           result=$?
           set -e
-          docker cp "$APP":/tmp/olympus-p5-results/. "$OUT/" || true
+          docker exec "$APP" sh -c 'ls -la /tmp/olympus-p5-results' || true
+          docker cp "$APP":/tmp/olympus-p5-results "$OUT/copied-results" || true
+          if [ -d "$OUT/copied-results" ]; then
+            cp -a "$OUT/copied-results"/. "$OUT"/
+          fi
           docker logs --tail 50 "$APP" > "$OUT/original-app-logs.txt" 2>&1 || true
           python3 - "$OUT" <<'PY'
           import json, pathlib, sys
