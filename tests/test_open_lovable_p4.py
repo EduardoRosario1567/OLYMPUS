@@ -206,7 +206,7 @@ class OpenLovableP4HttpTests(unittest.TestCase):
         self.assertEqual(self.client.post("/cloud/open-lovable/reservations",
             json={"project_id":"p4-owner-project","client_request_id":"bad!"},
             headers=self.headers(self.owner)).status_code,422)
-        paths={route.path for route in self.app.routes}
+        paths={getattr(route, 'path', None) for route in self.app.routes}
         self.assertNotIn("/cloud/open-lovable/proxy",paths)
         self.assertNotIn("/cloud/open-lovable/inference",paths)
 
