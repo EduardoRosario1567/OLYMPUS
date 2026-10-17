@@ -11,7 +11,7 @@ from p5.prepare_local_inference import overlay
 
 SOURCE = """export async function POST(request) {
 const { prompt, model = 'openai/gpt-oss-20b', context, isEdit = false } = await request.json();
-const streamOptions = {model: modelProvider(actualModel), maxTokens: 8192,};
+const streamOptions = {model: modelProvider(actualModel), maxTokens: 8192,};\nconst message = {content: systemPrompt + ` Original generation instructions`};
 // Add reasoning effort for GPT-5 models\n        if (isOpenAI) { streamOptions.experimental_providerMetadata = {}; }
                 console.log('[generate-ai-code-stream] Groq service unavailable, falling back to GPT-4');
                 streamOptions.model = openai('gpt-4-turbo');
@@ -37,7 +37,7 @@ class P5LocalOnlyTests(unittest.TestCase):
             content=(root/"app/api/generate-ai-code-stream/route.ts").read_text()
             self.assertIn("openai.chat(actualModel)",content)
             self.assertIn("OPENAI_P5" if False else "OLYMPUS_P5_LOCAL_ONLY",content)
-            self.assertIn("2048",content)
+            self.assertIn("1024",content)
             self.assertNotIn("openai('gpt-4-turbo')",content)
             guard=(root/"middleware.ts").read_text()
             self.assertIn("OLYMPUS_P5_GATE_TOKEN",guard)
