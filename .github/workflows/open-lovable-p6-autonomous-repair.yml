@@ -38,9 +38,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 p6/extract_baseline.py p5-evidence upstream/p6_input/original.html
+          python3 p6/extract_baseline.py p5-evidence p6-input/original.html
           test "$(git -C upstream rev-parse HEAD)" = 806b8072f28afea11fa2b028cac1449eff74c511
           python3 p5/prepare_local_inference.py upstream
+          mkdir -p upstream/p6_input
+          cp p6-input/original.html upstream/p6_input/original.html
           cp p6/repair_loop.mjs upstream/p6_repair_loop.mjs
           node --check p6/repair_loop.mjs
       - name: Run independent local-only regression checks
