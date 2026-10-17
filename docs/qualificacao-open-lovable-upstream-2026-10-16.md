@@ -26,3 +26,14 @@ O arquivo `package.json` define `test:all` como `npm run test:integration && npm
 
 ## Restrições de governança
 Repositório OLYMPUS atualmente público: nenhuma chave, projeto privado, dump do Mac ou credencial pode ser enviada. Não existe aprovação para instalação no Mac, consumo pago ou promoção para `main`. O fluxo `/cloud/missions` da versão atual permanece intacto.
+
+## Qualificação inicial — evidência real
+- Execução GitHub Actions 38984977881: checkout, licença, `npm ci --ignore-scripts` e `npm run build` concluídos com sucesso, sem credenciais. https://github.com/EduardoRosario1567/OLYMPUS/actions/runs/38984977881
+- Smoke HTTP do servidor compilado: em execução na qualificação seguinte (resultado deve ser confirmado pelos logs).
+- Nenhuma missão com IA real, persistência de banco de dados ou uso multiusuário foi homologada.
+
+## Risco multiusuário identificado no código original
+- `app/api/create-ai-sandbox-v2/route.ts` invoca `sandboxManager.terminateAll()` antes de criar novo ambiente.
+- `lib/sandbox/sandbox-manager.ts` exporta singleton com `activeSandboxId` global.
+- `app/api/run-command-v2/route.ts` recupera o provedor ativo globalmente, sem demonstrar autorização por organização.
+- Esses indícios impedem conectar a fonte original como serviço compartilhado multiusuário sem auditoria e isolamento de identidade; não anulam seu potencial como motor integral em instância segregada.
