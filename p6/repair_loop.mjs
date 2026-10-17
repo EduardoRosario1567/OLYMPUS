@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
 const OUT='/tmp/olympus-p6-results';
 const BASE='http://127.0.0.1:3000';
@@ -15,12 +16,12 @@ function save(record) {
  fs.mkdirSync(OUT,{recursive:true});
  fs.writeFileSync(path.join(OUT,'p6-proof.json'),JSON.stringify(record,null,2));
 }
-function extract(raw) {
+export function extract(raw) {
  const items=[...raw.matchAll(/<file\s+path="([^"><]{1,150})"\s*>([\s\S]*?)<\/file>/gi)];
  return items.filter(m=>m[1]==='site/index.html' && m[2].length>=300 && m[2].length<50000)
    .map(m=>m[2].trim());
 }
-function check(html) {
+export function check(html) {
  let fail=[];
  if(!html.toLowerCase().includes(BRAND.toLowerCase()))fail.push('BRAND_POSITIONING_MISSING: '+BRAND);
  if(!/<html[^>]*lang=["']pt-BR["']/i.test(html))fail.push('LANG_NOT_PT_BR');
@@ -37,7 +38,7 @@ function check(html) {
  for(const item of banned)if(html.toLowerCase().includes(item.toLowerCase()))fail.push('UNVERIFIED_CLAIM: '+item);
  return fail;
 }
-function prompt(issues,iteration) {
+export function prompt(issues,iteration) {
  return [
   iteration===1?'Repare a landing page Rosales Café previamente reprovada.':'SEGUNDA TENTATIVA: faça uma nova página inteira corrigindo todas as falhas.',
   'FALHAS VERIFICADAS: '+issues.slice(0,16).join('; '),
@@ -124,8 +125,10 @@ async function main() {
  }
  proof.status='BLOCKED_REPAIR_EXHAUSTED';save(proof);process.exitCode=2;
 }
-try{await main();}catch(error){
- fs.mkdirSync(OUT,{recursive:true});
- fs.writeFileSync(path.join(OUT,'p6-error.txt'),String(error?.message||error));
- console.error('P6_BLOCKED',String(error?.message||error));process.exitCode=2;
+if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ try{await main();}catch(error){
+  fs.mkdirSync(OUT,{recursive:true});
+  fs.writeFileSync(path.join(OUT,'p6-error.txt'),String(error?.message||error));
+  console.error('P6_BLOCKED',String(error?.message||error));process.exitCode=2;
+ }
 }
