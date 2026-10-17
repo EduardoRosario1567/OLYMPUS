@@ -57,12 +57,21 @@ def overlay(root: Path, *, git_check=True):
     if text.count("maxTokens: 8192,") != 1:
         raise Blocked('P5_TOKEN_LIMIT_SIGNATURE_CHANGED')
     text = text.replace("maxTokens: 8192,",
-         "maxTokens: process.env.OLYMPUS_P5_LOCAL_ONLY === '1' ? 2048 : 8192,")
+         "maxTokens: process.env.OLYMPUS_P5_LOCAL_ONLY === '1' ? 1024 : 8192,")
     signature_reasoning = "// Add reasoning effort for GPT-5 models\n        if (isOpenAI) {"
     if text.count(signature_reasoning) != 1:
         raise Blocked('P5_OPENAI_METADATA_SIGNATURE_CHANGED')
     text = text.replace(signature_reasoning,
         "// Add reasoning effort for GPT-5 models\n        if (isOpenAI && process.env.OLYMPUS_P5_LOCAL_ONLY !== '1') {")
+    # The original upstream system prompt is very large for a 0.5B CPU model.
+    # Limit only this disposable pilot; keep its native parser and streamed API.
+    prompt_anchor = "content: systemPrompt + `"
+    if text.count(prompt_anchor) != 1:
+        raise Blocked("P5_SYSTEM_PROMPT_SIGNATURE_CHANGED")
+    bounded = """content: (process.env.OLYMPUS_P5_LOCAL_ONLY === '1'
+              ? 'Generate ONE complete self-contained HTML landing page in Brazilian Portuguese. Respond ONLY with <file path="site/index.html"> followed by valid responsive HTML/CSS and the closing </file> tag. No external assets, no invented awards, prices, contacts or origins. Use no scripts.'
+              : systemPrompt) + `"""
+    text = text.replace(prompt_anchor, bounded)
     source.write_text(text, encoding='utf-8')
     (root/'middleware.ts').write_text(MIDDLEWARE,encoding='utf-8')
     return {"status":"GUARDED_LOCAL_INFERENCE_CANDIDATE","upstream_pin":PIN,
