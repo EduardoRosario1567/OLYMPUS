@@ -1,0 +1,153 @@
+name: OLYMPUS P5 - real local free inference through original Open Lovable
+on:
+  push:
+    branches:
+      - olympus-open-lovable-p5-local-inference-20261016
+    paths:
+      - .github/workflows/open-lovable-p5-real-model.yml
+      - p5/**
+      - tests/test_open_lovable_p5.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authentic-original-model-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NPM_CONFIG_AUDIT: 'false'
+      NPM_CONFIG_FUND: 'false'
+    steps:
+      - name: Checkout OLYMPUS qualification branch
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Checkout original Open Lovable by fixed commit
+        uses: actions/checkout@v7
+        with:
+          repository: firecrawl/open-lovable
+          ref: 806b8072f28afea11fa2b028cac1449eff74c511
+          path: upstream
+          persist-credentials: false
+      - name: Source preflight and local-only overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 p5/prepare_local_inference.py upstream
+          cp p5/qualify_real_stream.mjs upstream/p5_qualify_real_stream.mjs
+          cp missions/rosales-cafe-acceptance.md upstream/p5_mission.md
+          test "$(wc -c < upstream/p5_mission.md)" -le 4000
+      - name: Unit qualification tests
+        run: python3 -m unittest tests.test_p3_prepare tests.test_open_lovable_p5 -v
+      - name: Compile original guarded Open Lovable into isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file p3/Dockerfile.p3 --tag olympus-p5-open-lovable:ci ./upstream
+      - name: Start real open-weight Ollama and run original generator
+        shell: bash
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/olympus-p5-evidence"
+          mkdir -p "$OUT"
+          MODEL="olympus-p5-ollama-$$"
+          APP="olympus-p5-open-lovable-$$"
+          NET="olympus-p5-internal-$$"
+          cleanup() {
+            docker rm -f "$APP" "$MODEL" >/dev/null 2>&1 || true
+            docker network rm "$NET" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          # Use the official upstream model runtime, pinned at execution by SHA in the evidence.
+          docker pull ollama/ollama:latest
+          docker image inspect ollama/ollama:latest --format '{{.Id}}' > "$OUT/ollama-image-id.txt"
+          docker run -d --name "$MODEL" --network bridge \
+            --memory=4g --memory-swap=4g --cpus=2 --pids-limit=256 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            --env OLLAMA_NUM_PARALLEL=1 \
+            --env OLLAMA_CONTEXT_LENGTH=8192 \
+            ollama/ollama:latest >/dev/null
+          ready=0
+          for i in $(seq 1 50); do
+            if docker exec "$MODEL" ollama list >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1 || { echo "BLOCKED: Ollama failed to start"; exit 2; }
+          docker exec "$MODEL" ollama pull qwen2.5-coder:0.5b
+          docker exec "$MODEL" ollama list > "$OUT/model-installed.txt"
+          grep -Fq "qwen2.5-coder:0.5b" "$OUT/model-installed.txt"
+          # After initial image/model download, neither container may reach the public internet.
+          docker network create --internal "$NET" >/dev/null
+          docker network disconnect bridge "$MODEL"
+          docker network connect --alias ollama "$NET" "$MODEL"
+          test "$(docker network inspect -f '{{.Internal}}' "$NET")" = true
+          test "$(docker inspect "$MODEL" -f '{{.HostConfig.NetworkMode}}')" = bridge || true
+          GATE_TOKEN="$(openssl rand -hex 24)"
+          docker run -d --name "$APP" --network "$NET" --pull=never \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=134217728,mode=1777 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            --memory=1g --memory-swap=1g --cpus=2 --pids-limit=128 \
+            --user=1000:1000 \
+            --env OLYMPUS_INSTANCE_ID=olympus-p5-lab-one \
+            --env OLYMPUS_P5_LOCAL_ONLY=1 \
+            --env "OLYMPUS_P5_GATE_TOKEN=$GATE_TOKEN" \
+            --env OPENAI_BASE_URL=http://ollama:11434/v1 \
+            --env OPENAI_API_KEY=local-only-placeholder-not-paid \
+            olympus-p5-open-lovable:ci >/dev/null
+          test "$(docker inspect "$APP" -f '{{.HostConfig.NetworkMode}}')" = "$NET"
+          test "$(docker inspect "$APP" -f '{{.HostConfig.ReadonlyRootfs}}')" = true
+          test "$(docker inspect "$APP" -f '{{len .Mounts}}')" = 0
+          test "$(docker inspect "$APP" -f '{{.HostConfig.Privileged}}')" = false
+          test -z "$(docker inspect "$APP" -f '{{json .HostConfig.PortBindings}}' | grep -E '0\\.0\\.0\\.0|127\\.0\\.0\\.1' || true)"
+          # Verify all original code-execution API routes stay DENIED without a gate token.
+          docker exec "$APP" node -e '
+          (async()=>{
+            for(const p of ["/api/run-command-v2","/api/create-ai-sandbox-v2","/api/generate-ai-code-stream"]){
+              const resp=await fetch("http://127.0.0.1:3000"+p,{method:"POST"});
+              if(resp.status!==503)process.exit(5);
+            }
+          })().catch(()=>process.exit(6));' || echo "Cold-start route probe deferred to streamed HTTP proof"
+          # Perform actual Ollama API inference, then call the ORIGINAL Open Lovable SSE endpoint.
+          set +e
+          docker exec --env "OLYMPUS_P5_GATE_TOKEN=$GATE_TOKEN" "$APP" \
+            node /app/p5_qualify_real_stream.mjs
+          result=$?
+          set -e
+          docker cp "$APP":/tmp/olympus-p5-results/. "$OUT/" || true
+          docker logs --tail 50 "$APP" > "$OUT/original-app-logs.txt" 2>&1 || true
+          python3 - "$OUT" <<'PY'
+          import json, pathlib, sys
+          proof=pathlib.Path(sys.argv[1])/'proof.json'
+          if not proof.exists():
+              raise SystemExit("BLOCKED: original execution produced no proof.json")
+          result=json.loads(proof.read_text())
+          print(json.dumps({k:result.get(k) for k in (
+              'status','direct_model','open_lovable_stream','files','failure_code')},ensure_ascii=False))
+          PY
+          if [ "$result" -ne 0 ]; then
+            echo "BLOCKED: native generated-file acceptance not met; evidence preserved"
+            exit 2
+          fi
+      - name: Publish evidence (including on failure)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-p5-real-local-inference-evidence
+          path: ${{ runner.temp }}/olympus-p5-evidence/
+          if-no-files-found: warn
+      - name: Explain proof limits
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## P5 experimental scope
+          The Ollama model is open weight and runs locally in a GitHub-hosted runner.
+          Only source/model downloads occurred before the Docker network was made internal.
+          A successful stream + complete source files proves real free-API inference through
+          ORIGINAL Open Lovable code generation, **not** completed integration to
+          OLYMPUS mission lifecycle, browser-tested Rosales Cafe, production tenancy,
+          guaranteed zero infrastructure expense, or automatic deployment.
+          A failed job is BLOCKED; inspect published proof.json before claiming outcomes.
+          EOF
