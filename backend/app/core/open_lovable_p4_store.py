@@ -7,6 +7,7 @@ For single-host lab qualification only. Production use is prohibited.
 from __future__ import annotations
 
 import secrets
+from contextlib import contextmanager
 import sqlite3
 import time
 from pathlib import Path
@@ -50,10 +51,15 @@ class ReservationStore:
         except OSError:
             pass
 
+    @contextmanager
     def _connect(self):
         connection = sqlite3.connect(str(self.path), timeout=10)
-        connection.execute("PRAGMA busy_timeout=10000")
-        return connection
+        try:
+            connection.execute("PRAGMA busy_timeout=10000")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     @staticmethod
     def _public(row) -> dict:
