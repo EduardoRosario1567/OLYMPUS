@@ -1,0 +1,70 @@
+name: OLYMPUS P4 - Real JWT and tenant separation
+on:
+  push:
+    branches:
+      - olympus-open-lovable-p4-auth-20261016
+    paths:
+      - .github/workflows/open-lovable-p4-auth.yml
+      - backend/app/api/open_lovable_p4.py
+      - backend/app/core/open_lovable_p4_store.py
+      - backend/app/main.py
+      - tests/test_open_lovable_p4.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authenticated-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      OLYMPUS_JWT_SECRET: p4-only-synthetic-ci-signing-key-0123456789abcdef012345
+      OLYMPUS_ENV: development
+      OLYMPUS_DB_BACKEND: sqlite
+      OLYMPUS_ADMIN_SENHA: p4-synthetic-ci-test-only-password
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install only existing OLYMPUS backend dependencies in disposable runner
+        run: pip install -r requirements-core.txt -r backend/requirements.txt
+      - name: Run full HTTP JWT RBAC tests (no provider, sandbox or secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH=".:backend"
+          export OLYMPUS_CLOUD_DATA_DIR="$RUNNER_TEMP/olympus-p4-ci"
+          python -m unittest tests.test_open_lovable_p4 -v
+      - name: Check opt-in router disabled by default and enabled in laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH=".:backend"
+          export OLYMPUS_CLOUD_DATA_DIR="$RUNNER_TEMP/olympus-p4-router"
+          unset OLYMPUS_OPEN_LOVABLE_P4 || true
+          python - <<'PY'
+          from app.main import app
+          routes = {route.path for route in app.routes}
+          assert "/cloud/open-lovable/status" not in routes
+          print("PASS: new API unavailable without explicit feature flag")
+          PY
+          OLYMPUS_OPEN_LOVABLE_P4=1 python - <<'PY'
+          from app.main import app
+          routes = {route.path for route in app.routes}
+          assert "/cloud/open-lovable/status" in routes
+          assert "/cloud/open-lovable/reservations" in routes
+          print("PASS: P4 opt-in routes mounted in real OLYMPUS API")
+          PY
+      - name: Record limits
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## P4 qualification scope
+          Actual JWT signatures, SaaS membership/role authorization and tenant/project
+          ownership exercised by FastAPI TestClient with disposable local databases.
+          No providers, external sandboxes, paid/free LLM, site generation or
+          production Postgres has been exercised.
+          Feature flag is off by default. All execution attempts are denied.
+          EOF
