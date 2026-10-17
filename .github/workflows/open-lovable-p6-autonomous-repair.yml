@@ -1,0 +1,201 @@
+name: OLYMPUS P6 - real AI repair and Chromium QA
+on:
+  push:
+    branches:
+      - olympus-open-lovable-p6-repair-20261016
+    paths:
+      - .github/workflows/open-lovable-p6-autonomous-repair.yml
+      - p6/**
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  real-model-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 34
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: firecrawl/open-lovable
+          ref: 806b8072f28afea11fa2b028cac1449eff74c511
+          path: upstream
+          persist-credentials: false
+      - name: Recover P5 ORIGINAL model-generated evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: olympus-p5-real-local-inference-evidence
+          run-id: 38995524749
+          github-token: ${{ github.token }}
+          path: p5-evidence
+      - name: Verify original model proof and apply local-only upstream overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 p6/extract_baseline.py p5-evidence upstream/p6_input/original.html
+          test "$(git -C upstream rev-parse HEAD)" = 806b8072f28afea11fa2b028cac1449eff74c511
+          python3 p5/prepare_local_inference.py upstream
+          cp p6/repair_loop.mjs upstream/p6_repair_loop.mjs
+          node --check p6/repair_loop.mjs
+      - name: Run independent local-only regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'beautifulsoup4>=4.12,<5'
+          python3 -m unittest tests.test_p3_prepare tests.test_open_lovable_p5 -v
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import {check,extract,prompt} from './p6/repair_loop.mjs';
+          const parent=fs.readFileSync('upstream/p6_input/original.html','utf8');
+          assert.ok(check(parent).length>=14);
+          assert.deepEqual(extract('<file path="../../evil">danger</file>'),[]);
+          assert.deepEqual(extract('<file path="site/index.html">unclosed'),[]);
+          assert.ok(prompt(check(parent),2).includes('Rosales Café'));
+          console.log('PASS: P6 repair-loop unit: true failures, truncated files, traversal, retry feedback');
+          JS
+          python3 - <<'PY'
+          from pathlib import Path
+          import importlib.util
+          spec=importlib.util.spec_from_file_location('qa','p6/qa_rosales.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          result=m.verify(Path('upstream/p6_input/original.html'))
+          assert result['status']=='BLOCKED' and result['blocking_count']>=14
+          print('PASS: P6 independent QA blocks original P5 HTML; issues:',result['blocking_count'])
+          PY
+      - name: Build original Open Lovable with isolated local-model guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file p3/Dockerfile.p3 -t olympus-open-lovable-p6:ci ./upstream
+      - name: Run two bounded real Qwen repair attempts with no outside network
+        timeout-minutes: 18
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/p6-evidence"
+          mkdir -p "$OUT"
+          MODEL="p6-model-$$"
+          APP="p6-app-$$"
+          NET="p6-private-$$"
+          cleanup() {
+            docker rm -f "$APP" "$MODEL" >/dev/null 2>&1 || true
+            docker network rm "$NET" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker pull ollama/ollama:latest
+          docker image inspect ollama/ollama:latest --format '{{.Id}}' > "$OUT/ollama-image.txt"
+          docker run -d --name "$MODEL" --network bridge \
+            --memory=4g --memory-swap=4g --cpus=4 --pids-limit=256 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_CONTEXT_LENGTH=4096 \
+            ollama/ollama:latest >/dev/null
+          ready=0
+          for i in $(seq 1 60);do
+            if docker exec "$MODEL" ollama list >/dev/null 2>&1;then ready=1;break;fi
+            sleep 2
+          done
+          test "$ready" = 1 || { echo 'BLOCKED: Ollama not ready';exit 2; }
+          docker exec "$MODEL" ollama pull qwen2.5-coder:1.5b
+          docker exec "$MODEL" ollama list > "$OUT/model-id.txt"
+          grep -Fq 'qwen2.5-coder:1.5b' "$OUT/model-id.txt"
+          docker network create --internal "$NET" >/dev/null
+          docker network disconnect bridge "$MODEL"
+          docker network connect --alias ollama "$NET" "$MODEL"
+          test "$(docker network inspect -f '{{.Internal}}' "$NET")" = true
+          GATE="$(openssl rand -hex 24)"
+          docker run -d --name "$APP" --network "$NET" --pull=never \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=134217728,mode=1777 \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            --memory=1g --memory-swap=1g --cpus=2 --pids-limit=128 \
+            --user=1000:1000 \
+            -e OLYMPUS_INSTANCE_ID=olympus-p6-lab-one \
+            -e OLYMPUS_P5_LOCAL_ONLY=1 \
+            -e "OLYMPUS_P5_GATE_TOKEN=$GATE" \
+            -e OPENAI_BASE_URL=http://ollama:11434/v1 \
+            -e OPENAI_API_KEY=local-only-placeholder-not-paid \
+            olympus-open-lovable-p6:ci >/dev/null
+          test "$(docker inspect "$APP" -f '{{.HostConfig.NetworkMode}}')" = "$NET"
+          test "$(docker inspect "$APP" -f '{{.HostConfig.ReadonlyRootfs}}')" = true
+          test "$(docker inspect "$APP" -f '{{len .Mounts}}')" = 0
+          test "$(docker inspect "$APP" -f '{{.HostConfig.Privileged}}')" = false
+          up=0
+          for i in $(seq 1 60);do
+            if docker exec "$APP" node -e '
+              (async()=>{const res=await fetch("http://127.0.0.1:3000/api/olympus-p3-proof");
+                if(!res.ok||(await res.json()).instanceId!=="olympus-p6-lab-one")process.exit(2);
+              })().catch(()=>process.exit(3));' >/dev/null 2>&1;then up=1;break;fi
+            sleep 2
+          done
+          test "$up" = 1 || { docker logs --tail 50 "$APP";echo 'BLOCKED: Next server';exit 2; }
+          docker exec "$APP" node -e '
+            (async()=>{for(const p of ["/api/run-command-v2","/api/create-ai-sandbox-v2",
+              "/api/apply-ai-code-stream","/api/generate-ai-code-stream"]){
+              const res=await fetch("http://127.0.0.1:3000"+p,{method:"POST"});
+              if(res.status!==503)process.exit(5);
+            }})().catch(()=>process.exit(6));'
+          echo 'PASS: original command/sandbox/model APIs denied without internal gate'
+          set +e
+          docker exec "$APP" node /app/p6_repair_loop.mjs
+          result=$?
+          set -e
+          for file in p6-proof.json p6-error.txt site-index.html candidate-1.html candidate-2.html model-original-stream-1.txt model-original-stream-2.txt;do
+            if docker exec "$APP" test -f "/tmp/olympus-p6-results/$file";then
+              docker exec "$APP" cat "/tmp/olympus-p6-results/$file" > "$OUT/$file"
+            fi
+          done
+          docker logs --tail 80 "$APP" > "$OUT/open-lovable-last80.log" 2>&1 || true
+          test -s "$OUT/p6-proof.json" || { echo 'BLOCKED: no repair evidence';exit 2; }
+          python3 - "$OUT" <<'PY'
+          import pathlib,sys,json
+          root=pathlib.Path(sys.argv[1]);info=json.loads((root/'p6-proof.json').read_text())
+          for a in info['attempts']:
+              print('AI_REPAIR:',json.dumps({k:a.get(k) for k in ['attempt','status','http','events','bytes','issues','error']},ensure_ascii=False)[:2000])
+          print('P6_STATUS:',info['status'])
+          PY
+          if [ "$result" != 0 ] || [ ! -s "$OUT/site-index.html" ];then
+            echo 'BLOCKED: model did not independently repair the entire file'
+            exit 2
+          fi
+      - name: Independently verify source and serve it over HTTP in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/p6-evidence"
+          mkdir -p "$OUT/site"
+          cp "$OUT/site-index.html" "$OUT/site/index.html"
+          python3 - "$OUT" <<'PY'
+          import pathlib,sys,json,hashlib
+          d=pathlib.Path(sys.argv[1]);p=json.loads((d/'p6-proof.json').read_text())
+          data=(d/'site/index.html').read_text()
+          h=hashlib.sha256(data.encode()).hexdigest()
+          assert p['quick_gate'] is True
+          assert any(x.get('generated_sha256')==h and x['status']=='QUICK_GATE_PASS' for x in p['attempts'])
+          assert any(data in (d/f'model-original-stream-{i}.txt').read_text()
+                     for i in (1,2) if (d/f'model-original-stream-{i}.txt').exists())
+          print('PASS: recovered byte-for-byte original model-generated site, SHA-256',h)
+          PY
+          python3 -m pip install 'playwright==1.55.0'
+          python3 -m playwright install --with-deps chromium
+          python3 p6/qa_rosales.py "$OUT/site/index.html" --browser --out "$OUT/browser"
+      - name: Preserve actual repair attempts, failures and screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-p6-repair-evidence
+          path: ${{ runner.temp }}/p6-evidence/
+          if-no-files-found: warn
+      - name: Clarify production limitations
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          P6 is an isolated qualification of autonomous model-origin repair.
+          Even SUCCESS does not mean deployment or a production multiuser OLYMPUS mission.
+          Actual P4 reservation-to-sandbox authorization and durable mission export remain separate gates.
+          EOF
