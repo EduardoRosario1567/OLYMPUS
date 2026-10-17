@@ -46,16 +46,18 @@ jobs:
           unset OLYMPUS_OPEN_LOVABLE_P4 || true
           python - <<'PY'
           from app.main import app
-          routes = {getattr(route, "path", None) for route in app.routes}
-          assert "/cloud/open-lovable/status" not in routes
+          from fastapi.testclient import TestClient
+          with TestClient(app) as client:
+              assert client.get("/cloud/open-lovable/status").status_code == 404
           print("PASS: new API unavailable without explicit feature flag")
           PY
           OLYMPUS_OPEN_LOVABLE_P4=1 python - <<'PY'
           from app.main import app
-          routes = {getattr(route, "path", None) for route in app.routes}
-          assert "/cloud/open-lovable/status" in routes
-          assert "/cloud/open-lovable/reservations" in routes
-          print("PASS: P4 opt-in routes mounted in real OLYMPUS API")
+          from fastapi.testclient import TestClient
+          with TestClient(app) as client:
+              assert client.get("/cloud/open-lovable/status").status_code == 401
+              assert client.post("/cloud/open-lovable/reservations", json={}).status_code == 401
+          print("PASS: P4 opt-in routes mounted and JWT required in real OLYMPUS API")
           PY
       - name: Record limits
         if: always()
