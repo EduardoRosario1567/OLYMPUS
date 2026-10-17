@@ -1,0 +1,66 @@
+name: OLYMPUS - Open Lovable upstream baseline
+on:
+  push:
+    branches:
+      - olympus-consolidacao-unica-20261016
+    paths:
+      - .github/workflows/open-lovable-upstream.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-upstream-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+    steps:
+      - name: Checkout pinned original Open Lovable (separate from OLYMPUS)
+        uses: actions/checkout@v4
+        with:
+          repository: firecrawl/open-lovable
+          ref: 806b8072f28afea11fa2b028cac1449eff74c511
+          path: upstream
+          persist-credentials: false
+      - name: Verify exact source, license and declared tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "806b8072f28afea11fa2b028cac1449eff74c511"
+          grep -Fq 'MIT License' upstream/LICENSE
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('upstream/package.json', 'utf8'));
+          const scripts = pkg.scripts || {};
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '## Open Lovable original baseline\n\n' +
+            '- Source pinned: \`806b8072f28afea11fa2b028cac1449eff74c511\`\n' +
+            '- License file: MIT present\n' +
+            '- Application build script: ' + (scripts.build || 'MISSING') + '\n' +
+            '- Test suite contract: ' +
+              (scripts['test:all'] && !scripts['test:integration']
+                ? 'BROKEN: test:all references missing test:integration'
+                : 'Requires further evaluation') + '\n\n');
+          console.log('Upstream package', pkg.name, pkg.version);
+          console.log('Scripts', scripts);
+          NODE
+      - name: Set up Node.js 22 without project credentials
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+      - name: Install upstream dependencies without lifecycle scripts
+        working-directory: upstream
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Original upstream production build (no model/API calls)
+        working-directory: upstream
+        run: npm run build
+      - name: Record verdict
+        if: always()
+        run: |
+          echo 'This only verifies clean dependency installation and compilation.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No LLM, Firecrawl, Vercel Sandbox, E2B, browser mission, deployment, or OLYMPUS Mac installation was exercised.' >> "$GITHUB_STEP_SUMMARY"
