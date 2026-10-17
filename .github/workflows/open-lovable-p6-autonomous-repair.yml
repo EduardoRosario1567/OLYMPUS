@@ -41,6 +41,16 @@ jobs:
           python3 p6/extract_baseline.py p5-evidence p6-input/original.html
           test "$(git -C upstream rev-parse HEAD)" = 806b8072f28afea11fa2b028cac1449eff74c511
           python3 p5/prepare_local_inference.py upstream
+          # P6-only change: stronger open-weight model, still allowlisted and offline.
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('upstream/app/api/generate-ai-code-stream/route.ts')
+          s=src.read_text(encoding='utf-8')
+          a="model !== 'openai/qwen2.5-coder:1.5b'"
+          b="model !== 'openai/qwen2.5-coder:3b'"
+          assert s.count(a)==1 and s.count("? 1536 : 8192,")==1, 'P6_SOURCE_PIN_CHANGED'
+          src.write_text(s.replace(a,b).replace("? 1536 : 8192,","? 2600 : 8192,"),encoding='utf-8')
+          PY
           mkdir -p upstream/p6_input
           cp p6-input/original.html upstream/p6_input/original.html
           cp p6/repair_loop.mjs upstream/p6_repair_loop.mjs
@@ -104,9 +114,9 @@ jobs:
             sleep 2
           done
           test "$ready" = 1 || { echo 'BLOCKED: Ollama not ready';exit 2; }
-          docker exec "$MODEL" ollama pull qwen2.5-coder:1.5b
+          docker exec "$MODEL" ollama pull qwen2.5-coder:3b
           docker exec "$MODEL" ollama list > "$OUT/model-id.txt"
-          grep -Fq 'qwen2.5-coder:1.5b' "$OUT/model-id.txt"
+          grep -Fq 'qwen2.5-coder:3b' "$OUT/model-id.txt"
           docker network create --internal "$NET" >/dev/null
           docker network disconnect bridge "$MODEL"
           docker network connect --alias ollama "$NET" "$MODEL"

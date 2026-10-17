@@ -11,7 +11,7 @@ const BASE='http://127.0.0.1:3000';
 const BRAND='Rosales Café, o melhor café brasileiro ao estilo Colombiano.';
 const P5_SHA='838d3d741335a9ac49363237956be0c05beec60b7909b8b2407b22609bf57faf';
 const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
-const banned=['O Melhor Café da América do Sul','Cartão de Crédito','Transferência bancária','Tarjeta de Débito','Faça seu Prato','Encontre-nos em qualquer lugar do Brasil','profissionais qualificados','entrega grátis','preço'];
+const banned=['O Melhor Café da América do Sul','Cartão de Crédito','Transferência bancária','Tarjeta de Débito','Faça seu Prato','Encontre-nos em qualquer lugar do Brasil','profissionais qualificados','entrega grátis','preço','2023','O Melhor Café do Brasil','Pratos Principais','Churrasco','Salada de Frutas','Visite nosso café','Contacte-nos','Menu','cardápio'];
 function save(record) {
  fs.mkdirSync(OUT,{recursive:true});
  fs.writeFileSync(path.join(OUT,'p6-proof.json'),JSON.stringify(record,null,2));
@@ -36,17 +36,24 @@ export function check(html) {
  if(/<form\b|<script\b|<iframe\b|<object\b/i.test(html))fail.push('UNVERIFIED_FORM_OR_EXECUTABLE');
  if(/<link[^>]+rel=["']stylesheet|<img[^>]+src=["']https?:|(?:href|src)=["']\/\//i.test(html))fail.push('EXTERNAL_DEPENDENCY');
  for(const item of banned)if(html.toLowerCase().includes(item.toLowerCase()))fail.push('UNVERIFIED_CLAIM: '+item);
+ const sectionIds=new Set([...html.matchAll(/\\bid=["']([\\w-]+)["']/gi)].map(m=>m[1]));
+ for(const m of html.matchAll(/<a\\b[^>]*\\bhref=["']#([^"']+)["']/gi)){
+   if(!sectionIds.has(m[1]))fail.push('BROKEN_ANCHOR: '+m[1]);
+ }
+ if(/\\b(?:19|20)\\d{2}\\b/.test(html))fail.push('UNVERIFIED_YEAR');
  return fail;
 }
 export function prompt(issues,iteration) {
  return [
   iteration===1?'Repare a landing page Rosales Café previamente reprovada.':'SEGUNDA TENTATIVA: faça uma nova página inteira corrigindo todas as falhas.',
   'FALHAS VERIFICADAS: '+issues.slice(0,16).join('; '),
-  'POSICIONAMENTO obrigatório e VISÍVEL: '+BRAND,
+  'FRASE EXATA, VISÍVEL e SEM ALTERAR NENHUMA LETRA, no HERO / H2: '+BRAND,
+  'Atenção: NÃO escreva "O melhor café do Brasil", não use "Rosales" como localização. Rosales Café é uma marca de café, NÃO é restaurante. A frase acima é a ÚNICA alegação autorizada.',
   'Produza exatamente UM arquivo <file path="site/index.html"> ... </file>.',
   'HTML completo com <!DOCTYPE html>, <html lang="pt-BR">, meta viewport, title Rosales Café, header, nav com âncoras, main, >=2 section, h1 e footer.',
   'Dentro do HTML use <style> com pelo menos 350 caracteres de CSS real, cores café e creme e um bloco @media para tela de 390px.',
-  'Nenhum arquivo CSS/JS externo, script, iframe, links de imagem externa, preços, formas de pagamento, endereço, contato, certificações, datas, promoções ou dados comerciais não confirmados.',
+  'PROIBIDO Tailwind, jsdelivr, CDN, imports, link rel=stylesheet, arquivos CSS/JS externos, script, iframe, imagens externas, preços, pagamentos, endereço, contato, menu, pratos, restaurante, ofertas, anos (ex.: 2023), localização ou qualquer dado inventado.',
+  'Links de menu interno só como href="#conceito" se houver id="conceito" correspondente; nunca crie href="#menu" inexistente.',
   'Texto em português brasileiro sobre cultura, experiência, aromas e estilo colombiano. Não inventar origem geográfica.',
   'Feche todas as tags, retorne APENAS o <file ...> completo sem comentários fora dele.'
  ].join('\n');
@@ -83,7 +90,7 @@ async function main() {
  if(!token || token.length<20)throw Error('NO_INTERNAL_GATE_TOKEN');
  const proof={schema:'olympus.p6.repair.v1',p5_sha256:P5_SHA,
   upstream:'firecrawl/open-lovable@806b8072f28afea11fa2b028cac1449eff74c511',
-  model:'qwen2.5-coder:1.5b',provider:'local Ollama',paid_api_calls:0,
+  model:'qwen2.5-coder:3b',provider:'local Ollama',paid_api_calls:0,
   attempts:[],status:'BLOCKED',quick_gate:false,final_browser_qa:false,
   production_integrated:false};
  save(proof);
@@ -97,7 +104,7 @@ async function main() {
   try{
    const res=await fetch(BASE+'/api/generate-ai-code-stream',{
     method:'POST',headers:{'Content-Type':'application/json','x-olympus-p5-internal':token},
-    body:JSON.stringify({prompt:p,model:'openai/qwen2.5-coder:1.5b',isEdit:false,context:{}}),
+    body:JSON.stringify({prompt:p,model:'openai/qwen2.5-coder:3b',isEdit:false,context:{}}),
     signal:AbortSignal.timeout(180000)});
    step.http=res.status;save(proof);
    const result=await streaming(res,state=>{step.progress=state;save(proof)});
