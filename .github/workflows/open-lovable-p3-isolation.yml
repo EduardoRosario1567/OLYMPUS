@@ -1,0 +1,61 @@
+name: OLYMPUS P3 - Open Lovable isolated no-inference smoke
+on:
+  push:
+    branches:
+      - olympus-open-lovable-p3-isolation-20261016
+    paths:
+      - .github/workflows/open-lovable-p3-isolation.yml
+      - p3/**
+      - tests/test_p3_prepare.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-open-lovable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NPM_CONFIG_AUDIT: 'false'
+      NPM_CONFIG_FUND: 'false'
+    steps:
+      - name: Checkout OLYMPUS experimental branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout exact original Open Lovable source
+        uses: actions/checkout@v4
+        with:
+          repository: firecrawl/open-lovable
+          ref: 806b8072f28afea11fa2b028cac1449eff74c511
+          path: upstream
+          persist-credentials: false
+      - name: Apply fail-closed no-inference guard to disposable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = 806b8072f28afea11fa2b028cac1449eff74c511
+          grep -Fq 'MIT License' upstream/LICENSE
+          python3 p3/prepare_upstream.py upstream
+      - name: Run unit tests of P3 qualification
+        run: python3 -m unittest discover -s tests -p 'test_p3*.py' -v
+      - name: Build guarded original Next.js application as Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file p3/Dockerfile.p3 --tag olympus-open-lovable-p3:ci ./upstream
+      - name: Prove two separate no-network instances and blocked API calls
+        run: bash p3/smoke_two_containers.sh olympus-open-lovable-p3:ci
+      - name: Record validation boundaries
+        if: always()
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'TXT'
+          ## OLYMPUS P3: qualification only
+          Upstream pinned; two Docker instances; no provider credentials;
+          all upstream APIs blocked with HTTP 503; no external network.
+          A successful run does NOT prove inference, cost-free LLM access,
+          external sandbox, multi-tenant auth, Rosales Cafe delivery, ZIP
+          export, or production readiness. Neither main nor Mac is modified.
+          TXT
