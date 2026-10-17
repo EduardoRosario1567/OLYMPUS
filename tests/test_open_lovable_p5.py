@@ -37,7 +37,7 @@ class P5LocalOnlyTests(unittest.TestCase):
             content=(root/"app/api/generate-ai-code-stream/route.ts").read_text()
             self.assertIn("openai.chat(actualModel)",content)
             self.assertIn("OPENAI_P5" if False else "OLYMPUS_P5_LOCAL_ONLY",content)
-            self.assertIn("1024",content)
+            self.assertIn("1536",content)
             self.assertNotIn("openai('gpt-4-turbo')",content)
             guard=(root/"middleware.ts").read_text()
             self.assertIn("OLYMPUS_P5_GATE_TOKEN",guard)

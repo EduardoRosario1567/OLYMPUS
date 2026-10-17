@@ -76,9 +76,9 @@ jobs:
             sleep 2
           done
           test "$ready" = 1 || { echo "BLOCKED: Ollama failed to start"; exit 2; }
-          docker exec "$MODEL" ollama pull qwen2.5-coder:0.5b
+          docker exec "$MODEL" ollama pull qwen2.5-coder:1.5b
           docker exec "$MODEL" ollama list > "$OUT/model-installed.txt"
-          grep -Fq "qwen2.5-coder:0.5b" "$OUT/model-installed.txt"
+          grep -Fq "qwen2.5-coder:1.5b" "$OUT/model-installed.txt"
           # After initial image/model download, neither container may reach the public internet.
           docker network create --internal "$NET" >/dev/null
           docker network disconnect bridge "$MODEL"
@@ -144,6 +144,11 @@ jobs:
           docker exec "$APP" cat /tmp/olympus-p5-results/original-stream.txt > "$OUT/original-stream.txt" \
             || rm -f "$OUT/original-stream.txt"
           docker logs --tail 50 "$APP" > "$OUT/original-app-logs.txt" 2>&1 || true
+          if [ -s "$OUT/original-stream.txt" ]; then
+            echo "Original stream preview, first 400 chars:"
+            head -c 400 "$OUT/original-stream.txt" | tr '\n' ' '
+            echo
+          fi
           echo "Original application diagnostic, last 15 lines:"
           tail -15 "$OUT/original-app-logs.txt" | cut -c1-350 || true
           python3 - "$OUT" <<'PY'

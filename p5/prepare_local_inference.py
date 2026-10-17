@@ -40,7 +40,7 @@ def overlay(root: Path, *, git_check=True):
     signature = "const { prompt, model = 'openai/gpt-oss-20b', context, isEdit = false } = await request.json();"
     guard = """
     if (process.env.OLYMPUS_P5_LOCAL_ONLY === '1' &&
-        (model !== 'openai/qwen2.5-coder:0.5b' || isEdit ||
+        (model !== 'openai/qwen2.5-coder:1.5b' || isEdit ||
          typeof prompt !== 'string' || prompt.length > 4000)) {
       return NextResponse.json({status:'BLOCKED',reason:'OLYMPUS_P5_LOCAL_MODEL_ONLY'}, {status:403});
     }
@@ -57,7 +57,7 @@ def overlay(root: Path, *, git_check=True):
     if text.count("maxTokens: 8192,") != 1:
         raise Blocked('P5_TOKEN_LIMIT_SIGNATURE_CHANGED')
     text = text.replace("maxTokens: 8192,",
-         "maxTokens: process.env.OLYMPUS_P5_LOCAL_ONLY === '1' ? 1024 : 8192,")
+         "maxTokens: process.env.OLYMPUS_P5_LOCAL_ONLY === '1' ? 1536 : 8192,")
     signature_reasoning = "// Add reasoning effort for GPT-5 models\n        if (isOpenAI) {"
     if text.count(signature_reasoning) != 1:
         raise Blocked('P5_OPENAI_METADATA_SIGNATURE_CHANGED')
@@ -75,7 +75,7 @@ def overlay(root: Path, *, git_check=True):
     source.write_text(text, encoding='utf-8')
     (root/'middleware.ts').write_text(MIDDLEWARE,encoding='utf-8')
     return {"status":"GUARDED_LOCAL_INFERENCE_CANDIDATE","upstream_pin":PIN,
-            "model_allowlist":["openai/qwen2.5-coder:0.5b"],
+            "model_allowlist":["openai/qwen2.5-coder:1.5b"],
             "original_model_calls":0,"paid_fallback_blocked":True}
 
 def main():

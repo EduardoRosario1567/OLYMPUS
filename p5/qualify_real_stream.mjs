@@ -9,7 +9,7 @@ fs.mkdirSync(RESULTS,{recursive:true});
 const report={
   schema:'olympus.p5.proof.v1', source:'firecrawl/open-lovable',
   upstream_commit:'806b8072f28afea11fa2b028cac1449eff74c511',
-  configured_model:'qwen2.5-coder:0.5b',
+  configured_model:'qwen2.5-coder:1.5b',
   claimed_free_api_calls:0,
   generated_by_agent:false,
   site_passed:false,
@@ -31,7 +31,7 @@ async function run(){
   if(h.instanceId!==process.env.OLYMPUS_INSTANCE_ID)throw Error('INSTANCE_MISMATCH');
   const direct=await fetch(modelBase+'/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'qwen2.5-coder:0.5b',
+    body:JSON.stringify({model:'qwen2.5-coder:1.5b',
       messages:[{role:'system',content:'You are a coding assistant.'},
                 {role:'user',content:'Reply with exactly this word: FUNCTIONAL'}],
       stream:false,max_tokens:80,temperature:0}),
@@ -58,7 +58,7 @@ async function run(){
       'Content-Type':'application/json',
       'x-olympus-p5-internal':process.env.OLYMPUS_P5_GATE_TOKEN
     },
-    body:JSON.stringify({prompt,model:'openai/qwen2.5-coder:0.5b',isEdit:false,context:{}}),
+    body:JSON.stringify({prompt,model:'openai/qwen2.5-coder:1.5b',isEdit:false,context:{}}),
     signal:AbortSignal.timeout(180000),
   });
   report.open_lovable_stream.http_status=response.status;
