@@ -11,7 +11,7 @@ const BASE='http://127.0.0.1:3000';
 const BRAND='Rosales Café, o melhor café brasileiro ao estilo Colombiano.';
 const P5_SHA='838d3d741335a9ac49363237956be0c05beec60b7909b8b2407b22609bf57faf';
 const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
-const banned=['O Melhor Café da América do Sul','Cartão de Crédito','Transferência bancária','Tarjeta de Débito','Faça seu Prato','Encontre-nos em qualquer lugar do Brasil','profissionais qualificados','entrega grátis','preço','2023','O Melhor Café do Brasil','Pratos Principais','Churrasco','Salada de Frutas','Visite nosso café','Contacte-nos','Menu','cardápio'];
+const banned=['O Melhor Café da América do Sul','Cartão de Crédito','Transferência bancária','Tarjeta de Débito','Faça seu Prato','Encontre-nos em qualquer lugar do Brasil','profissionais qualificados','entrega grátis','preço','2023','O Melhor Café do Brasil','Pratos Principais','Churrasco','Salada de Frutas','Visite nosso café','Contacte-nos','Menu','cardápio','sustentável','ingredientes de primeira qualidade','somente com ingredientes','pré-filhamento','processamento a vapor','Features','Telefone:','E-mail:','Contato','reserva','serviços','Maquina de gravação'];
 function save(record) {
  fs.mkdirSync(OUT,{recursive:true});
  fs.writeFileSync(path.join(OUT,'p6-proof.json'),JSON.stringify(record,null,2));
@@ -41,6 +41,8 @@ export function check(html) {
    if(!sectionIds.has(m[1]))fail.push('BROKEN_ANCHOR: '+m[1]);
  }
  if(/\b(?:19|20)\d{2}\b/.test(html))fail.push('UNVERIFIED_YEAR');
+ if(/#[0]{2}7bff|#0056b3/i.test(html))fail.push('OFF_BRAND_STYLING');
+ if(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(html))fail.push('UNVERIFIED_CONTACT_DETAILS');
  return fail;
 }
 export function prompt(issues,iteration) {

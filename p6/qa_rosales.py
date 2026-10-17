@@ -10,7 +10,11 @@ BRAND='Rosales Café, o melhor café brasileiro ao estilo Colombiano.'
 BANNED=['O Melhor Café da América do Sul','Encontre-nos em qualquer lugar do Brasil',
  'Cartão de Crédito','Transferência bancária','Tarjeta de Débito',
  'Nossa equipe de profissionais qualificados','Faça seu Prato',
- 'entrega grátis','100% orgânico','certificado','preço']
+ 'entrega grátis','100% orgânico','certificado','preço',
+ 'O Melhor Café do Brasil','ingredientes de primeira qualidade',
+ 'somente com ingredientes','sustentável','pré-filhamento','processamento a vapor',
+ 'máquina de gravação','Maquina de gravação','Features',
+ 'Churrasco','Pratos Principais','reserva','serviços','Telefone:','E-mail:','Contato']
 def verify(filename:Path, *, browser:bool=False, out:Path|None=None):
  filename=filename.resolve(strict=True);root=filename.parent
  data=filename.read_bytes();html=data.decode('utf-8');soup=BeautifulSoup(html,'html.parser')
@@ -26,10 +30,14 @@ def verify(filename:Path, *, browser:bool=False, out:Path|None=None):
  if len(soup.find_all('section'))<2:fail('TOO_FEW_SECTIONS')
  for claim in BANNED:
   if claim.casefold() in html.casefold():fail('UNVERIFIED_CLAIM',claim)
+ if re.search(r'\b[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}\b',text) or re.search(r'\+\d{2}\s*\(\d{2}\)',text):
+  fail('UNVERIFIED_CONTACT_DETAILS')
+ if re.search(r'\b(?:19|20)\d{2}\b',text):fail('UNVERIFIED_YEAR')
  if soup.find('form'):fail('UNVERIFIED_FORM')
  if soup.find(['script','iframe','object']):fail('EXECUTABLE_CONTENT')
  css='\n'.join(tag.get_text() for tag in soup.find_all('style'))
  if len(css)<350:fail('INLINE_CSS_MISSING')
+ if re.search(r'#007bff|#0056b3',css,re.I):fail('OFF_BRAND_STYLING')
  if '@media' not in css:fail('RESPONSIVE_CSS_MISSING')
  if not re.search(r'background(?:-color)?\s*:|linear-gradient\(',css,re.I):fail('VISUAL_STYLING_MISSING')
  ids={tag.get('id') for tag in soup.find_all(id=True)}
