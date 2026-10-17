@@ -36,11 +36,11 @@ export function check(html) {
  if(/<form\b|<script\b|<iframe\b|<object\b/i.test(html))fail.push('UNVERIFIED_FORM_OR_EXECUTABLE');
  if(/<link[^>]+rel=["']stylesheet|<img[^>]+src=["']https?:|(?:href|src)=["']\/\//i.test(html))fail.push('EXTERNAL_DEPENDENCY');
  for(const item of banned)if(html.toLowerCase().includes(item.toLowerCase()))fail.push('UNVERIFIED_CLAIM: '+item);
- const sectionIds=new Set([...html.matchAll(/\\bid=["']([\\w-]+)["']/gi)].map(m=>m[1]));
- for(const m of html.matchAll(/<a\\b[^>]*\\bhref=["']#([^"']+)["']/gi)){
+ const sectionIds=new Set([...html.matchAll(/\bid=["']([\w-]+)["']/gi)].map(m=>m[1]));
+ for(const m of html.matchAll(/<a\b[^>]*\bhref=["']#([^"']+)["']/gi)){
    if(!sectionIds.has(m[1]))fail.push('BROKEN_ANCHOR: '+m[1]);
  }
- if(/\\b(?:19|20)\\d{2}\\b/.test(html))fail.push('UNVERIFIED_YEAR');
+ if(/\b(?:19|20)\d{2}\b/.test(html))fail.push('UNVERIFIED_YEAR');
  return fail;
 }
 export function prompt(issues,iteration) {
