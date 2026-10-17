@@ -85,6 +85,12 @@ app.include_router(artifacts.router)
 app.include_router(media.router)
 app.include_router(saas.router)
 
+# The experimental Open Lovable bridge is disabled by default. It never runs
+# upstream code or contacts models/sandboxes; pilot access is separately gated.
+if os.environ.get("OLYMPUS_OPEN_LOVABLE_P4") == "1":
+    from app.api import open_lovable_p4
+    app.include_router(open_lovable_p4.router)
+
 # The pre-cloud API uses a global development repository without tenant
 # columns. It is excluded by default so a SaaS account can never read it.
 if os.environ.get("OLYMPUS_ENABLE_LEGACY_API") == "1":
