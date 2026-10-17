@@ -12,7 +12,7 @@ from p5.prepare_local_inference import overlay
 SOURCE = """export async function POST(request) {
 const { prompt, model = 'openai/gpt-oss-20b', context, isEdit = false } = await request.json();
 const streamOptions = {model: modelProvider(actualModel), maxTokens: 8192,};
-if (isOpenAI) { streamOptions.experimental_providerMetadata = {}; }
+// Add reasoning effort for GPT-5 models\n        if (isOpenAI) { streamOptions.experimental_providerMetadata = {}; }
                 console.log('[generate-ai-code-stream] Groq service unavailable, falling back to GPT-4');
                 streamOptions.model = openai('gpt-4-turbo');
                 actualModel = 'gpt-4-turbo';
