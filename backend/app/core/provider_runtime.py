@@ -992,6 +992,13 @@ def _agent_compatible_routes(routes):
         # System One typed decisions rather than text/chat completions.
         if "content-safety" in model or model.startswith("jev-"):
             continue
+
+        # Batch variants use a different execution contract/endpoint and
+        # cannot participate in the interactive coding-agent chat loop.
+        # Exclude only the incompatible route, never the whole provider.
+        if model.endswith(":batch"):
+            continue
+
         eligible.append(route)
     return tuple(eligible)
 
@@ -1054,3 +1061,20 @@ def build_mission_routing(timeout_seconds: float, policy_override=None):
         adapter,
         OlympusModelSelector(routes),
     )
+
+
+def build_visual_review_routing(timeout_seconds=20):
+    """Use existing administrator-selected free routes; never paid fallback."""
+    registry = build_provider_registry(timeout_seconds)
+    routes = configured_free_routes(registry)
+    eligible = tuple(route.id for route in capacity_filter_routes(routes) if route.tier in {'free','local'})
+    adapter = CapacityAwareRoutingAdapter(MultiProviderRoutingAdapter(registry,default_provider='omniroute'))
+    return adapter, eligible
+
+
+def build_delivery_verifier(workspace, routing_factory=None):
+    """Shared HUB quality boundary for project missions and the older tester."""
+    from olympus.agent.verifier import AgentVerifier
+    from olympus.agent.visual_delivery import VisualDeliveryReviewer
+    return AgentVerifier(workspace,visual_reviewer=VisualDeliveryReviewer(
+        routing_factory=routing_factory or build_visual_review_routing))

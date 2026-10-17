@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_share_controls_exist_on_logs_and_mission():
+def test_share_controls_work_after_history_navigation():
     from tests.frontend_contract import check_browser
     check_browser('diagnostic')
 

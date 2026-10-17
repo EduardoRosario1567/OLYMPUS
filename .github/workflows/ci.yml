@@ -7,30 +7,28 @@ on:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências do backend
-        run: pip install -r backend/requirements.txt pytest
+        run: pip install -r requirements-core.txt -r backend/requirements.txt pytest
 
       - name: Preparar .env
         run: |
           cp backend/.env.example backend/.env
+          sed -i 's/OLYMPUS_ADMIN_EMAIL=.*/OLYMPUS_ADMIN_EMAIL=admin@olympus.local/' backend/.env
           sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
-
-      - name: Rodar suíte de testes (unittest via pytest)
-        run: |
-          export PYTHONPATH=.
-          pytest tests/ -v
+          sed -i 's/OLYMPUS_JWT_SECRET=.*/OLYMPUS_JWT_SECRET=ci-release-gate-secret-0123456789abcdef0123456789abcdef/' backend/.env
 
       - name: Verificar sintaxe Python
         run: python -m compileall -q backend olympus scripts
@@ -42,16 +40,56 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
-          npx playwright install chromium
+          npx playwright install --with-deps chromium
+
+      - name: Provisionar imagens de qualificação em Docker local
+        if: github.event.repository.private == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker --host unix:///var/run/docker.sock version
+          python3 scripts/verify_preview_lock.py containers/preview-runtime.package.json containers/preview-runtime.package-lock.json
+          PYTHON_BASE=$(cat containers/python-base.txt)
+          NODE_BASE=$(cat containers/node-base.txt)
+          [[ "$PYTHON_BASE" =~ ^python@sha256:[a-f0-9]{64}$ ]]
+          [[ "$NODE_BASE" =~ ^node@sha256:[a-f0-9]{64}$ ]]
+          echo "Bases imutáveis: $PYTHON_BASE $NODE_BASE"
+          docker --host unix:///var/run/docker.sock pull "$PYTHON_BASE"
+          docker --host unix:///var/run/docker.sock pull "$NODE_BASE"
+          docker --host unix:///var/run/docker.sock build --pull=false --build-arg "RUNNER_BASE=$PYTHON_BASE" -t olympus-project-runner:3.0.8-candidate -f containers/project-runner.Dockerfile containers
+          docker --host unix:///var/run/docker.sock build --pull=false --build-arg "NODE_BASE=$NODE_BASE" -t olympus-preview-runner:3.0.8-candidate -f containers/preview-runner.Dockerfile containers
+          docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate --format '{{.Id}}'
+          mkdir -p .olympus/qa/runner-provisioning
+          printf '%s\n' "$PYTHON_BASE" > .olympus/qa/runner-provisioning/python-base.txt
+          printf '%s\n' "$NODE_BASE" > .olympus/qa/runner-provisioning/node-base.txt
+          docker --host unix:///var/run/docker.sock image inspect olympus-project-runner:3.0.8-candidate olympus-preview-runner:3.0.8-candidate > .olympus/qa/runner-provisioning/image-identities.json
+          LOCK_CONTAINER=$(docker --host unix:///var/run/docker.sock create --entrypoint /bin/true olympus-preview-runner:3.0.8-candidate)
+          trap 'docker --host unix:///var/run/docker.sock rm "$LOCK_CONTAINER" >/dev/null' EXIT
+          docker --host unix:///var/run/docker.sock cp "$LOCK_CONTAINER:/opt/olympus-preview/package-lock.json" .olympus/qa/runner-provisioning/preview-runtime.package-lock.json
+          docker --host unix:///var/run/docker.sock cp "$LOCK_CONTAINER:/opt/olympus-preview/package.json" .olympus/qa/runner-provisioning/preview-runtime.package.json
+          sha256sum .olympus/qa/runner-provisioning/* > .olympus/qa/runner-provisioning/SHA256SUMS
+
+      - name: Preservar dependências e identidades das imagens testadas
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-runner-provisioning
+          path: .olympus/qa/runner-provisioning/
+          if-no-files-found: error
+          include-hidden-files: true
+
 
       - name: Gate de release — missão, failover, checkpoint e entrega
+        env:
+          OLYMPUS_BROWSER_CHROMIUM_SANDBOX: "0"
+          # Reviewed synthetic QA subprocesses; real Docker gates do not load pytest fixtures.
+          OLYMPUS_QA_TRUSTED_TESTS: "1"
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           python3 scripts/release_gate.py
 
       - name: Publicar relatório do gate
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: olympus-release-gate-report
           path: .olympus/qa/release-gate.json
@@ -59,7 +97,7 @@ jobs:
 
       - name: Subir backend em background
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/backend"
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
@@ -82,12 +120,12 @@ jobs:
 
       - name: Seed — primeira execução (cria dados)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           python3 scripts/seed_demo.py
 
       - name: Seed — segunda execução (deve ser idempotente, não duplicar)
         run: |
-          export PYTHONPATH=.
+          export PYTHONPATH=.:backend
           SAIDA=$(python3 scripts/seed_demo.py)
           echo "$SAIDA"
           echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
@@ -102,21 +140,9 @@ jobs:
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Chamar endpoints protegidos com o token real
+      - name: APIs atuais autenticadas e rejeição sem token
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-
-      - name: Confirmar que endpoint protegido rejeita sem token (401)
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
-          [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
+          python3 scripts/http_contract_gate.py
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
         if: always()
@@ -129,11 +155,11 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências
         working-directory: frontend
@@ -141,7 +167,8 @@ jobs:
 
       - name: Preparar .env.local
         working-directory: frontend
-        run: cp .env.local.example .env.local
+        run: |
+          printf '%s\n' 'NEXT_PUBLIC_API_BASE_URL=http://localhost:8000' > .env.local
 
       - name: Build de produção
         working-directory: frontend
@@ -149,7 +176,7 @@ jobs:
 
       - name: Auditar dependências JavaScript
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Subir em modo produção
         working-directory: frontend
@@ -173,6 +200,37 @@ jobs:
       - name: Confirmar página de login carrega (redireciona pra /login)
         run: curl -sfL http://localhost:3000 -o /tmp/home.html && grep -qi "olympus" /tmp/home.html
 
+      - name: Preparar navegador de qualificação
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Interface real — navegação, rolagem e provedores
+        env:
+          OLYMPUS_QA_BROWSER_EVIDENCE: .olympus/qa/ui-evidence
+        run: |
+          mkdir -p .olympus/qa/ui-evidence
+          node tests/frontend_contract.mjs "$GITHUB_WORKSPACE/frontend/node_modules" http://localhost:3000 > .olympus/qa/frontend-shell-browser.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('.olympus/qa/frontend-shell-browser.json').read_text())
+          failures={name:result for name,result in report['checks'].items() if result is not True}
+          assert not failures, json.dumps(failures,ensure_ascii=False)
+          assert not report['page_errors'], report['page_errors']
+          print('Browser workflow checks: PASS',len(report['checks']))
+          PY
+
+      - name: Preservar evidências da interface
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-interface-browser
+          path: |
+            .olympus/qa/frontend-shell-browser.json
+            .olympus/qa/ui-evidence/
+          include-hidden-files: true
+          if-no-files-found: ignore
+
       - name: Logs do frontend (sempre, pra depurar se algo falhar)
         if: always()
         run: cat frontend.log || true
@@ -180,3 +238,50 @@ jobs:
       - name: Encerrar frontend
         if: always()
         run: kill "$(cat frontend.pid)" 2>/dev/null || true
+
+  macos-update-qualification:
+    if: github.event.repository.private == false
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Atualização e reversão no filesystem macOS
+        run: |
+          python3 -m unittest tests.test_update_macos tests.test_preview_dependency_lock -v
+          bash -n ATUALIZAR-OLYMPUS.command
+      - name: Construir e conferir pacote exato do commit
+        run: |
+          python3 scripts/build_update_bundle.py --output .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip
+          python3 scripts/verify_update_bundle.py .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip > .olympus/qa/update-package-report.json
+          cat .olympus/qa/update-package-report.json
+      - name: Build frontend com dependências recém-instaladas
+        working-directory: frontend
+        run: |
+          printf '%s\n' 'NEXT_PUBLIC_API_BASE_URL=http://localhost:8000' > .env.local
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - uses: actions/checkout@v7
+        with:
+          ref: f31c40591ccf5f850e8599e0d05fd69e3aa595f8
+          path: previous-qualified-source
+      - name: Atualização nativa — dependências, processos e HTTP reais
+        run: |
+          python3 scripts/update_runtime_e2e.py --old-source previous-qualified-source --archive .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip --report .olympus/qa/update-native-report.json
+      - name: Preservar candidata e relatório de atualização
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: olympus-macos-update-candidate
+          path: |
+            .olympus/qa/OLYMPUS-UPDATE-CANDIDATE.zip
+            .olympus/qa/update-package-report.json
+            .olympus/qa/update-native-report.json
+            .olympus/qa/update-native-*.log
+          include-hidden-files: true
+          if-no-files-found: error

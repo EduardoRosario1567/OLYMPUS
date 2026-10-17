@@ -9,6 +9,12 @@ SAFETY = AgentModelRoute('openrouter/nvidia/nemotron-3.5-content-safety:free', '
 JEV = AgentModelRoute('opencode_zen::jev-1.13-free', 'Jev', 'opencode_zen', 900)
 OLLAMA = AgentModelRoute('ollama_cloud::gpt-oss:120b', 'Ollama', 'ollama_cloud', 800)
 GROQ = AgentModelRoute('groq::qwen/qwen3.8-27b', 'Groq', 'groq', 700)
+BATCH = AgentModelRoute(
+    'openrouter::google/gemini-3.8-flash:batch',
+    'Gemini batch',
+    'openrouter',
+    750,
+)
 
 
 class RouteCompatibilityTests(unittest.TestCase):
@@ -24,6 +30,12 @@ class RouteCompatibilityTests(unittest.TestCase):
 
     def test_only_incompatible_routes_yield_no_candidates(self):
         self.assertEqual(self.routes((SAFETY, JEV)), ())
+
+    def test_batch_route_is_not_used_by_interactive_agent(self):
+        self.assertEqual(
+            self.routes((BATCH, GROQ)),
+            (GROQ,),
+        )
 
     def test_general_nemotron_and_dynamic_router_are_kept(self):
         lightning = AgentModelRoute('openrouter/nvidia/nemotron-3.5-lightning:free', 'Lightning', 'openrouter', 500)

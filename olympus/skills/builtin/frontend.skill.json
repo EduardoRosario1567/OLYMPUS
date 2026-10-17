@@ -24,7 +24,8 @@
     "patch_file",
     "run_test",
     "inspect_result",
-    "finish"
+    "finish",
+    "import_asset"
   ],
   "depends_on": [
     "testing",
@@ -38,8 +39,9 @@
     "Prioritize user assets and confirmed business facts. Where imagery or context is missing, call research_sources with target images/context and payload query plus language. Choose intentional imagery; never invent image URLs, addresses, prices, founding dates, testimonials or business contacts.",
     "Build a distinctive brand composition with purposeful type, restrained spacing and a dominant relevant visual when imagery serves the mission. Avoid repeated generic card grids; preserve an existing design system when provided. Write concise specific copy in the user language.",
     "Implement semantic responsive HTML, meaningful alt text, keyboard focus and every requested interaction. Do not put delivery-process commentary or internal review labels into the product UI.",
-    "Validate the actual deliverable, assets and primary controls. Structural checks and inspect_result do not prove visual quality. Without a real browser/vision tool, report desktop/mobile and visual review as pending in delivery notes; never claim professionally reviewed.",
-    "Refine hierarchy, image crop, contrast, mobile layout and copy after rendered-page review. Publish facts, sources/license credits and tested behavior separately from review still pending."
+    "On finish the independent browser gate renders the static page at 1440, 768 and 390 pixels, checks runtime/console errors, images, overflow and control behavior. Repair the reported defects and retry within the mission budget. Form inputs are synthetic; this does not certify backend submission. Structural checks and inspect_result do not prove visual quality; never claim aesthetic review without an actual reviewer.",
+    "Refine hierarchy, image crop, contrast, mobile layout and copy after rendered-page review. Publish facts, sources/license credits and tested behavior separately from review still pending.",
+    "Use import_asset with a retrieved exact Commons File: title to save images under assets/ with source/license metadata; reference local paths in preview. Import verifies signatures, not aesthetic suitability or complete image decoding."
   ],
   "completion_checks": [
     "Delivery concept exists with confirmed facts separated from unknowns and a coherent brand/content/interaction direction.",

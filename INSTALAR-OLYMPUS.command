@@ -18,7 +18,7 @@ for tool in ditto curl python3 node npm; do
 done
 if [ -n "$missing" ]; then
   echo "ERRO: componentes necessários não encontrados:$missing"
-  echo "Instale Python 3.9 ou superior e Node.js 18 ou superior antes de continuar."
+  echo "Instale Python 3.9 ou superior e Node.js 20.9 ou superior antes de continuar."
   read -r -p "Pressione ENTER para fechar."
   exit 1
 fi
@@ -28,16 +28,20 @@ if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) el
   read -r -p "Pressione ENTER para fechar."
   exit 1
 fi
-if ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'; then
-  echo "ERRO: o Node.js precisa ser 18 ou superior."
+if ! node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.exit(major>20 || (major===20 && minor>=9) ? 0 : 1)'; then
+  echo "ERRO: o Node.js precisa ser 20.9 ou superior."
   read -r -p "Pressione ENTER para fechar."
   exit 1
 fi
 
-TARGET_ROOT="$HOME/Documents/OLYMPUS-PILOTO-$VERSION"
-if [ -e "$TARGET_ROOT" ]; then
-  TARGET_ROOT="$HOME/Documents/OLYMPUS-PILOTO-$VERSION-$(date +%Y%m%d-%H%M%S)"
-fi
+TARGET_ROOT="$HOME/Documents/OLYMPUS-PILOTO"
+for existing in "$HOME"/Documents/OLYMPUS-PILOTO*; do
+  if [ -f "$existing/frontend/public/olympus-version.json" ] || [ -e "$TARGET_ROOT" ]; then
+    echo "ERRO: uma instalação já existe. Use o atualizador cumulativo com backup e rollback."
+    echo "A instalação existente foi preservada; nenhuma segunda pasta foi criada."
+    exit 1
+  fi
+done
 
 mkdir -p "$(dirname "$TARGET_ROOT")"
 ditto "$SOURCE_ROOT" "$TARGET_ROOT"

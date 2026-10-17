@@ -13,6 +13,7 @@ from olympus.agent.model_selector import OlympusModelSelector
 from olympus.agent.planner import ModelPlanner
 from olympus.agent.recovery import FailureKind
 from olympus.agent.state import AgentState, AgentStatus
+from olympus.agent.verifier import AgentVerifier
 from olympus.routing.interfaces import RoutingAdapter
 from olympus.skills import SkillPolicy, SkillRegistry, SkillResolver
 
@@ -146,17 +147,27 @@ class AutonomousPatchRunner:
         checkpoint_store: Optional[MissionCheckpointStore] = None,
         mission_compiler: Optional[MissionCompiler] = None,
         skill_registry: Optional[SkillRegistry] = None,
+        verifier_factory=None,
     ) -> None:
         self.root = str(Path(root).resolve())
         self.router = router
         self.selector = selector or OlympusModelSelector()
         self.planner_factory = planner_factory or (lambda router, model: ModelPlanner(router, model))
-        self.loop_factory = loop_factory or (lambda root, planner: AgentLoop(root, planner))
+        self.verifier_factory = verifier_factory or AgentVerifier
+        self._mission_verifier = None
+        self.loop_factory = loop_factory or self._default_loop
         self.telemetry = telemetry
         self.checkpoint_store = checkpoint_store or MissionCheckpointStore(self.root)
         self.mission_compiler = mission_compiler or MissionCompiler()
         self.skill_registry = skill_registry or SkillRegistry((str(Path(self.root) / ".olympus" / "skills"),))
         self.skill_resolver = SkillResolver(self.skill_registry)
+
+    def _default_loop(self, root, planner):
+        # Model failover must not replenish the visual repair budget or pay
+        # (even in quota) for another opinion about the identical artifact.
+        if self._mission_verifier is None:
+            self._mission_verifier = self.verifier_factory(root)
+        return AgentLoop(root,planner,verifier=self._mission_verifier)
 
     def _emit(self, event: str, **payload: Any) -> None:
         if self.telemetry is not None:
@@ -176,7 +187,8 @@ class AutonomousPatchRunner:
                 "write docs/delivery-concept.md: visual thesis, content plan, interaction plan, evidence",
                 "select supplied assets or research relevant public images/context and record sources/credits",
                 "build the complete runnable web deliverable",
-                "check actual controls, semantics and assets; browser/visual review pending without real evidence",
+                "check actual controls, semantics and assets; independent vision review uses real screenshots when available",
+                "repair visual findings and rerender; unavailable vision remains unassessed and cannot pass its gate",
                 "repair every failed deterministic check before finish",
             ],
             "mathematics": [
@@ -211,6 +223,7 @@ class AutonomousPatchRunner:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def run(self, mission: MissionSpec, resume: bool = True) -> MissionResult:
+        self._mission_verifier = None
         completed = []
         fingerprint = self._mission_fingerprint(mission)
         checkpoint = self.checkpoint_store.load(mission.id) if resume else None

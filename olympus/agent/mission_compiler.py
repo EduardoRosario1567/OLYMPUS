@@ -156,7 +156,12 @@ class MissionCompiler:
                 "OLYMPUS_WEB_DELIVERY_V1: Before implementation create docs/delivery-concept.md "
                 "with Visual thesis, Content plan, Interaction plan and Evidence sections. "
                 "Record confirmed business facts separately from unknown facts; identify assets, "
-                "sources and licenses. Browser and visual review remain pending without actual tool evidence.",
+                "sources and licenses. At finish, independent browser checks inspect the static page in "
+                "desktop/tablet/mobile sizes and exercise primary controls; repair reported errors. "
+                "Use local assets compatible with the protected preview. Rendered checks do not prove "
+                "aesthetic suitability. A configured independent vision reviewer receives the real screenshots "
+                "and this concept; repair its actionable findings and rerender before finish. Model opinion is "
+                "not human approval. An unavailable vision route remains unassessed and cannot pass its gate.",
             )
         if exact:
             requirements.insert(0, "Create %s with exact content %r" % exact)

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from olympus.agent.mission import AutonomousPatchRunner, MissionSpec, MissionStep
 from olympus.routing.omniroute_adapter import OmniRouteAdapter
+from app.core.provider_runtime import build_delivery_verifier
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/missions", tags=["missions"])
 class MissionCreate(BaseModel):
     task: str = Field(min_length=3, max_length=12000)
     max_iterations: int = Field(default=24, ge=1, le=24)
+    static_delivery: bool = False
 
 
 class MissionView(BaseModel):
@@ -33,6 +35,7 @@ class MissionView(BaseModel):
     tests_run: List[str] = []
     confidence: Optional[float] = None
     error: Optional[str] = None
+    delivery_available: bool = False
 
 
 _LOCK = threading.Lock()
@@ -69,7 +72,7 @@ def _seed_workspace(root: Path) -> None:
     (root / "app" / "__init__.py").write_text("", encoding="utf-8")
     (root / "tests" / "__init__.py").write_text("", encoding="utf-8")
     (root / "README.md").write_text(
-        "# OLYMPUS Web Tester Sandbox\n\nThis workspace is disposable and isolated.\n",
+        "# OLYMPUS Temporary Workspace\n\nThis folder is disposable; OS-level isolation is NOT verified.\n",
         encoding="utf-8",
     )
 
@@ -85,7 +88,7 @@ def _run_mission(mission_id: str) -> None:
     workspace = Path(tempfile.mkdtemp(prefix="olympus-web-"))
     try:
         _seed_workspace(workspace)
-        _event(mission_id, "mission_start", isolated=True)
+        _event(mission_id, "mission_start", temporary_workspace=True, os_sandbox_verified=False)
         router_adapter = OmniRouteAdapter(
             base_url=os.environ.get("OLYMPUS_OMNIROUTE_URL", "http://127.0.0.1:20128"),
             api_key=(os.environ.get("OLYMPUS_OMNIROUTE_API_KEY") or os.environ.get("OMNIROUTE_API_KEY") or None),
@@ -99,6 +102,7 @@ def _run_mission(mission_id: str) -> None:
         runner = AutonomousPatchRunner(
             str(workspace),
             router_adapter,
+            verifier_factory=build_delivery_verifier,
             telemetry=lambda e: _event(mission_id, e.get("event", "runtime"), **{k: v for k, v in e.items() if k != "event"}),
         )
         result = runner.run(spec)
@@ -137,6 +141,13 @@ def _run_mission(mission_id: str) -> None:
 
 @router.post("", response_model=MissionView, status_code=202)
 def create_mission(payload: MissionCreate):
+    if payload.static_delivery:
+        # This legacy execution path has no proven OS-level sandbox.
+        # Fail before creating a mission, thread, or contacting a provider.
+        raise HTTPException(
+            status_code=503,
+            detail="BLOCKED: entrega estática exige isolamento de execução comprovado; nenhum provedor foi acionado.",
+        )
     mission_id = uuid.uuid4().hex[:12]
     now = _now()
     record = {
@@ -150,6 +161,7 @@ def create_mission(payload: MissionCreate):
         "tests_run": [],
         "confidence": None,
         "error": None,
+        "delivery_available": False,
         "events": [],
         "_max_iterations": payload.max_iterations,
     }

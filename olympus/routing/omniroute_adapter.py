@@ -23,6 +23,7 @@ from olympus.routing.interfaces import (
 )
 
 from olympus.models import ExecutionStatus
+from olympus.routing.image_inputs import validated_image_inputs, image_message
 
 
 def _elapsed_ms(start: float) -> int:
@@ -407,15 +408,20 @@ class OmniRouteAdapter:
             prompt: Texto do prompt do usuário
             max_tokens: Limite opcional de tokens de saída
             temperature: Temperatura opcional de sampling
-            **kwargs: Ignorados (reservados para extensão futura)
+            **kwargs: image_inputs accepts bounded inline raster screenshots
 
         Returns:
             RoutingExecutionResult com resultado tipado.
         """
         start = time.perf_counter()
+        try:
+            images = validated_image_inputs(kwargs.get('image_inputs'))
+        except ValueError:
+            return RoutingExecutionResult(model_id, '', 'omniroute', '', 0, 0.0,
+                False, 'invalid inline image input', {}, 'invalid_image_input')
         body = {
             "model": model_id,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": image_message(prompt, images)}],
             "stream": False,
         }
         if max_tokens is not None:
@@ -545,6 +551,8 @@ class OmniRouteAdapter:
                     "correlation_id": data.get("correlation_id"),
                     "http_status": status,
                     "token_budget_repaired": token_budget_repaired,
+                    "image_inputs_sent": len(images),
+                    "actual_model_reported": isinstance(data.get('model'),str) and bool(data['model'].strip()),
                 }
                 execution_status = ExecutionStatus.SUCCESS
 

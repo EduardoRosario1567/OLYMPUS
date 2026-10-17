@@ -1,3 +1,4 @@
+from olympus.cloud.project_studio import PreviewStopError
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
@@ -229,13 +230,15 @@ def restore_version(project_id: str, version_id: str, payload: ProjectVersionRes
     if not payload.confirm:
         raise HTTPException(status_code=400, detail="Confirme a restauração para continuar.")
     try:
-        _STUDIO_RUNTIMES.stop(project_id, identity.tenant_id)
+        _STUDIO_RUNTIMES.stop_checked(project_id, identity.tenant_id)
         restored, safety = _RUNTIME.restore_project_version(project_id, version_id, tenant_id=identity.tenant_id)
         return {"restored": _version_view(restored), "safety_backup": _version_view(safety)}
     except KeyError:
         raise HTTPException(status_code=404, detail="Projeto ou versão não encontrados.")
     except ValueError:
         raise HTTPException(status_code=409, detail="A versão falhou na verificação de integridade e não foi aplicada.")
+    except PreviewStopError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except RuntimeError:
         raise HTTPException(status_code=409, detail="Aguarde a missão atual terminar antes de restaurar uma versão.")
 
@@ -287,7 +290,9 @@ def runtime_logs(project_id: str, after: int = Query(default=0, ge=0), identity=
 def stop_runtime(project_id: str, identity=Depends(_can_write)):
     try:
         _RUNTIME.projects.project_root(project_id, tenant_id=identity.tenant_id)
-        _STUDIO_RUNTIMES.stop(project_id, identity.tenant_id)
+        _STUDIO_RUNTIMES.stop_checked(project_id, identity.tenant_id)
+    except PreviewStopError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except KeyError:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
 
@@ -299,7 +304,8 @@ def _preview_response(token: str, asset_path: Optional[str] = None):
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     headers = {
         "Cache-Control": "no-store",
-        "Content-Security-Policy": "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'",
+        "Access-Control-Allow-Origin": "*",
+        "Content-Security-Policy": "sandbox allow-scripts; default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
     }

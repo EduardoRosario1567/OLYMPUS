@@ -17,6 +17,8 @@ from .project_workspace import ProjectWorkspaceManager
 from .project_versions import ProjectVersionStore
 from .decisions import DecisionStore
 from olympus.agent.verifier import AgentVerifier
+from olympus.agent.acceptance import compile_contract, format_failures, snapshot
+from olympus.agent.mission_compiler import MissionCompiler
 from olympus.memory import MemoryContextProvider, MemoryType, Sensitivity, MemoryWriter
 from contextlib import contextmanager
 
@@ -391,7 +393,7 @@ class CloudRuntime:
     safely replay the mission using Mission Resume semantics.
     """
 
-    def __init__(self, data_dir: str, runner_factory: Callable[[str, Callable[[dict], None]], object], max_workers: int = 2, lease_seconds: float = 30.0, max_worker_retries: int = 3, memory_store=None):
+    def __init__(self, data_dir: str, runner_factory: Callable[[str, Callable[[dict], None]], object], max_workers: int = 2, lease_seconds: float = 30.0, max_worker_retries: int = 3, memory_store=None, verifier_factory=None):
         self.data_dir = Path(data_dir).resolve()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.workspace_root = self.data_dir / "workspaces"
@@ -401,6 +403,7 @@ class CloudRuntime:
         self.versions = ProjectVersionStore(self.projects, self.data_dir / "versions")
         self.decisions = DecisionStore(str(self.data_dir / "decisions.sqlite3"))
         self.runner_factory = runner_factory
+        self.verifier_factory = verifier_factory or AgentVerifier
         self.max_workers = max(1, int(max_workers))
         self.lease_seconds = max(5.0, float(lease_seconds))
         self.max_worker_retries = max(0, int(max_worker_retries))
@@ -687,6 +690,12 @@ class CloudRuntime:
                 self.store.event(execution_id, name, **payload)
 
             failure_stage = "runner_setup"
+            # Derive authority from the persisted user task, before agent-written
+            # files or model statements can influence the publication decision.
+            compiled_mission = MissionCompiler().compile(rec.task)
+            acceptance_contract = compile_contract(rec.task, workspace)
+            acceptance_contract.prepare()
+            acceptance_contract.before = snapshot(self.projects.project_root(rec.project_id, rec.tenant_id))
             runner = self.runner_factory(str(workspace), telemetry)
             if cancel.is_set():
                 return
@@ -722,10 +731,19 @@ class CloudRuntime:
                 tests_run = tuple(getattr(result, "tests_run", ()) or ())
                 verification_error = None
                 try:
-                    verifier = AgentVerifier(str(workspace))
-                    quality_errors = verifier.verify_task_deliverable(rec.task, files_modified)
+                    verifier = self.verifier_factory(str(workspace))
+                    acceptance_results, _ = acceptance_contract.verify(files_modified)
+                    acceptance_errors = tuple(
+                        "acceptance: " + line for line in format_failures(acceptance_results).splitlines()
+                    )
                     verification = verifier.verify(files_modified, tests_run)
-                    verification_error = tuple(dict.fromkeys(quality_errors + verification.errors))
+                    # Executable checks may change the output. Capture/review
+                    # the final bytes, never a page from before those checks.
+                    quality_errors = verifier.verify_task_deliverable(
+                        compiled_mission.instruction(), files_modified,
+                        compiled_mission.required_skills + compiled_mission.supporting_skills,
+                    )
+                    verification_error = tuple(dict.fromkeys(quality_errors + verification.errors + acceptance_errors))
                 except (OSError, ValueError, TypeError) as exc:
                     verification = None
                     verification_error = ("independent verification could not inspect the workspace: %s" % exc,)
@@ -748,6 +766,7 @@ class CloudRuntime:
                         "completion_rejected",
                         reason="independent_verification_failed",
                         errors=list(verification_error or ("verification failed",))[:20],
+                        delivery_review=getattr(verifier, "delivery_review", None),
                         verification=verification.report.to_dict() if verification is not None else None,
                     )
                 else:
@@ -762,8 +781,10 @@ class CloudRuntime:
                         execution_id,
                         "result_published",
                         files=list(promoted),
-                        delivery_review=getattr(result, "delivery_review", None),
+                        delivery_review=verifier.delivery_review,
                         verification=verification.report.to_dict(),
+                        acceptance=[item.line() for item in acceptance_results],
+                        contract_sha256=compiled_mission.original_sha256,
                         files_recovered=list(
                             path for path in discovered_files if path not in reported_files
                         ),

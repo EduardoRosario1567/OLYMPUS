@@ -9,6 +9,7 @@ class ActionType(str, Enum):
     READ_FILE = "read_file"
     SEARCH_CODE = "search_code"
     RESEARCH_SOURCES = "research_sources"
+    IMPORT_ASSET = "import_asset"
     CREATE_FILE = "create_file"
     PATCH_FILE = "patch_file"
     RUN_TEST = "run_test"
@@ -53,4 +54,5 @@ class AgentAction:
 IDEMPOTENT_GUARDED_ACTIONS = frozenset({
     ActionType.CREATE_FILE,
     ActionType.PATCH_FILE,
+    ActionType.IMPORT_ASSET,
 })

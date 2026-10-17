@@ -178,14 +178,49 @@ def run() -> dict[str, Any]:
             max_workers=1,
         )
         try:
-            submitted = runtime.submit("core-e2e", task, max_iterations=12, project_name="Core E2E")
-            deadline = time.time() + 5
+            submitted = runtime.submit(
+                "core-e2e",
+                task,
+                max_iterations=12,
+                project_name="Core E2E",
+            )
+            terminal = {"completed", "failed", "blocked"}
+            deadline = time.time() + 20
             record = submitted
-            while record.status not in {"completed", "failed", "blocked"} and time.time() < deadline:
+
+            while (
+                record is not None
+                and record.status not in terminal
+                and time.time() < deadline
+            ):
                 time.sleep(0.02)
                 record = runtime.get(submitted.execution_id)
+
             if record is None:
                 raise RuntimeError("execution record disappeared")
+
+            if record.status not in terminal:
+                raise RuntimeError(
+                    "core E2E timed out before terminal state; "
+                    "status=%s; calls=%s; events=%s"
+                    % (
+                        record.status,
+                        server.state["calls"],
+                        runtime.events(submitted.execution_id),
+                    )
+                )
+
+            if record.status != "completed":
+                raise RuntimeError(
+                    "core E2E mission ended as %s: %s; calls=%s; events=%s"
+                    % (
+                        record.status,
+                        getattr(record, "error", None),
+                        server.state["calls"],
+                        runtime.events(submitted.execution_id),
+                    )
+                )
+
             result = record
             project_root = runtime.projects.project_root("core-e2e")
             checkpoint_path = Path(submitted.workspace) / ".olympus" / "checkpoints" / "DEVELOP.json"

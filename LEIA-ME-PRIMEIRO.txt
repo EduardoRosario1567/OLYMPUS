@@ -1,6 +1,3 @@
-OLYMPUS 3.0.8 — STABILITY-REGRESSION-P1
-
-Leia README.md e ../RELATORIO-ESTABILIDADE-OLYMPUS.md.
-Atualização cumulativa: ../ATUALIZAR-ESTABILIDADE-OLYMPUS.txt.
-O ZIP contém a fonte consolidada; não substitua a instalação em uso pelo ZIP.
-Homologação no Mac e revisão visual das entregas ainda não confirmadas.
+OLYMPUS 3.0.9 — DELIVERY-QUALITY-RC1
+Candidata RC1 consolidada. Não instalar no Mac antes do gate de CI com navegador real.
+Mantém correções cumulativas e testes; isolamento de execução e revisão visual real das entregas ainda impedem a liberação.

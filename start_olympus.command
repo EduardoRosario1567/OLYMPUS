@@ -47,6 +47,7 @@ safe_stop_port(){
 
 echo "Iniciando OLYMPUS $EXPECTED_VERSION..."
 for t in curl python3 node npm lsof; do command -v "$t" >/dev/null 2>&1 || { echo "ERRO: componente ausente: $t"; exit 1; }; done
+node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.exit(major>20 || (major===20 && minor>=9) ? 0 : 1)' || { echo "ERRO: Node.js 20.9 ou superior é necessário."; exit 1; }
 
 if ! curl -sS --max-time 2 http://127.0.0.1:20128/v1/models >/dev/null 2>&1; then
   if command -v omniroute >/dev/null 2>&1; then nohup omniroute serve >"$RUNTIME_DIR/omniroute.log" 2>&1 & echo $! >"$RUNTIME_DIR/omniroute.pid"; fi
@@ -54,7 +55,7 @@ fi
 
 [ -x "$ROOT/.venv/bin/python" ] || python3 -m venv "$ROOT/.venv" || exit 1
 if [ ! -f "$ROOT/backend/.env" ]; then "$ROOT/.venv/bin/python" "$ROOT/scripts/first_run_setup.py" --template "$ROOT/backend/.env.example" --output "$ROOT/backend/.env" || exit 1; fi
-if ! "$ROOT/.venv/bin/python" -c 'import fastapi,jwt,uvicorn' >/dev/null 2>&1; then "$ROOT/.venv/bin/python" -m pip install -r "$ROOT/backend/requirements.txt" || exit 1; fi
+if ! "$ROOT/.venv/bin/python" -c 'import fastapi,jwt,uvicorn,yaml,sqlalchemy' >/dev/null 2>&1; then "$ROOT/.venv/bin/python" -m pip install -r "$ROOT/requirements-core.txt" -r "$ROOT/backend/requirements.txt" || exit 1; fi
 chmod 600 "$ROOT/backend/.env"
 
 # Reinicie sempre a instância da mesma versão iniciada com variáveis transitórias.
@@ -64,7 +65,7 @@ safe_stop_port 8000 "$ROOT" "backend OLYMPUS" || exit 1
 if ! wait_current backend_current 30; then echo "ERRO: backend $EXPECTED_VERSION não iniciou. Consulte .olympus/runtime/backend.log"; exit 1; fi
 bp="$(listener_pids 8000 | head -1)"; [ -n "$bp" ] && echo "$bp" >"$RUNTIME_DIR/backend.pid"
 
-if [ ! -x "$ROOT/frontend/node_modules/.bin/next" ]; then (cd "$ROOT/frontend" && npm install) || exit 1; fi
+if [ ! -x "$ROOT/frontend/node_modules/.bin/next" ]; then (cd "$ROOT/frontend" && npm ci) || exit 1; fi
 
 # 3.0.6: nunca reutilize um Next/Turbopack antigo em um start explícito.
 # A versão anterior podia responder HTTP 200 e ainda manter chunks/hidratação obsoletos.

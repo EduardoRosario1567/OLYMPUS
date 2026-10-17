@@ -3,12 +3,13 @@
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { copyDiagnostic, downloadDiagnostic, sanitizeDiagnostic, shareDiagnostic } from "@/lib/diagnostic-share";
+import olympusVersion from "@/public/olympus-version.json";
 
 function collectPageDiagnostic() {
   const mission = document.querySelector<HTMLElement>(".mission-diagnostic");
   const body = mission?.dataset.diagnosticText ?? mission?.textContent ?? document.body?.innerText ?? "";
   const header = [
-    "OLYMPUS 3.0.8",
+    `OLYMPUS ${olympusVersion.version}`,
     `URL: ${window.location.href}`,
     `Data: ${new Date().toISOString()}`,
     "",

@@ -27,7 +27,7 @@ class AutonomyPolicy:
     )
 
     def evaluate(self, action: AgentAction) -> AutonomyResult:
-        if action.type == ActionType.RESEARCH_SOURCES:
+        if action.type in (ActionType.RESEARCH_SOURCES, ActionType.IMPORT_ASSET):
             return AutonomyResult(AutonomyDecision.ALLOW, "bounded public source research")
         text = (str(action.target or "") + " " + str(action.payload or "")).lower()
         if any(re.search(pattern, text) for pattern in self.DANGEROUS_PATTERNS):

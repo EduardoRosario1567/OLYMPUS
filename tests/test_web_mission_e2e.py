@@ -20,20 +20,18 @@ class ScriptedFreeRouter:
         if self.calls == 1:
             output = json.dumps({'type': 'create_file', 'target': 'docs/delivery-concept.md', 'payload': '# Visual thesis\nA clear brand composition with restrained color, deliberate typography and readable spacing.\n# Content plan\nBrand, offer, detail and primary action.\n# Interaction plan\nNavigation and controls follow the requested workflow.\n# Evidence\nSynthetic fixture only. No claims about a real business. Browser and visual review pending.\n', 'reason': 'define the delivery concept'})
         elif self.calls == 2:
-            output = (
-                '{"type":"create_file","payload":{'
-                '"path":"app/index.html",'
-                '"content":"<!doctype html><html lang=\\"pt-BR\\"><head><title>Busca Olympus</title>'
-                '<meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><style>'
-                '*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101114;color:#f7f7f8;font-family:Arial,sans-serif}'
-                'main{width:min(680px,calc(100% - 2rem));text-align:center}h1{font-size:clamp(2rem,8vw,4rem);margin:0 0 1rem}'
-                'p{color:#a8abb3}.search{display:flex;gap:.6rem;margin-top:2rem}input{flex:1;padding:1rem;border:1px solid #454854;border-radius:999px;background:#1d1f25;color:white}'
-                'button{padding:0 1.4rem;border:0;border-radius:999px;background:#7dd3fc;color:#082f49;font-weight:bold}</style></head>'
-                '<body><main><h1>Busca Olympus</h1><p>Encontre informações relevantes com rapidez e clareza.</p>'
-                '<div class=\\"search\\"><input aria-label=\\"Pesquisar\\" placeholder=\\"Digite sua busca\\"><button>Pesquisar</button></div>'
-                '</main></body></html>"},'
-                '"reason":"create the interface"}'
-            )
+            output = json.dumps({'type':'create_file','payload':{
+                'path':'app/index.html', 'content':'''<!doctype html><html lang="pt-BR"><head><title>Busca Olympus</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101114;color:#f7f7f8;font-family:Arial,sans-serif}
+main{width:min(680px,calc(100% - 2rem));text-align:center}h1{font-size:clamp(2rem,8vw,4rem);margin:0 0 1rem}
+p{color:#a8abb3}.search{display:flex;gap:.6rem;margin-top:2rem}input{flex:1;min-width:0;padding:1rem;border:1px solid #454854;border-radius:999px;background:#1d1f25;color:white}
+button{padding:1rem 1.4rem;border:0;border-radius:999px;background:#7dd3fc;color:#082f49;font-weight:bold}
+@media(max-width:500px){.search{flex-direction:column}}</style></head>
+<body><main><h1>Busca Olympus</h1><p>Encontre informações relevantes com rapidez e clareza.</p>
+<div class="search"><input aria-label="Pesquisar" placeholder="Digite sua busca"><button onclick="document.querySelector('#result').textContent='Digite um termo para encontrar resultados locais.'">Pesquisar</button></div>
+<p id="result" aria-live="polite">Resultados locais aparecem aqui.</p></main></body></html>'''},
+                'reason':'create the interface'})
         else:
             output = (
                 '{"type":"finish","target":null,"payload":"ready",'
@@ -96,6 +94,15 @@ class TestWebMissionEndToEnd(unittest.TestCase):
                 self.workspace = Path(workspace)
 
             def run(self, task, max_iterations=12, resume=True):
+                concept = self.workspace / "docs/delivery-concept.md"
+                concept.parent.mkdir(parents=True, exist_ok=True)
+                concept.write_text(
+                    "# Visual thesis\nA readable interface preserves the recovered project identity.\n"
+                    "# Content plan\nPresent continuity and the result with synthetic text only.\n"
+                    "# Interaction plan\nThis fixture has no interactive control requirements.\n"
+                    "# Evidence\nRecovery fixture; browser and visual review remain pending.\n",
+                    encoding="utf-8",
+                )
                 target = self.workspace / "app" / "index.html"
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(
@@ -118,7 +125,7 @@ class TestWebMissionEndToEnd(unittest.TestCase):
                 "Crie uma landing page HTML do Olympus",
                 project_name="Lost Report",
             )
-            deadline = time.time() + 3
+            deadline = time.time() + 15
             record = submitted
             while record.status not in {"completed", "failed", "blocked"} and time.time() < deadline:
                 time.sleep(0.02)
@@ -127,7 +134,7 @@ class TestWebMissionEndToEnd(unittest.TestCase):
             published = Path(runtime.projects.project_root("lost-report"), "app", "index.html")
             self.assertIn("Olympus recuperado", published.read_text(encoding="utf-8"))
             event = next(item for item in runtime.events(submitted.execution_id) if item["event"] == "result_published")
-            self.assertEqual(event["files_recovered"], ["app/index.html"])
+            self.assertEqual(event["files_recovered"], ["app/index.html", "docs/delivery-concept.md"])
             session = ProjectPreviewSessions(runtime.projects).create("lost-report")
             self.assertEqual(session.entrypoint, "app/index.html")
 
@@ -148,7 +155,7 @@ class TestWebMissionEndToEnd(unittest.TestCase):
                 "Crie uma landing page HTML completa",
                 project_name="Empty Web",
             )
-            deadline = time.time() + 3
+            deadline = time.time() + 15
             record = submitted
             while record.status not in {"completed", "failed", "blocked"} and time.time() < deadline:
                 time.sleep(0.02)
@@ -172,8 +179,8 @@ class TestWebMissionEndToEnd(unittest.TestCase):
 
             self.assertTrue(report.success)
             self.assertEqual(report.status, "completed")
-            self.assertEqual(report.delivery_review["browser"], "pending")
-            self.assertEqual(report.delivery_review["visual"], "pending")
+            self.assertEqual(report.delivery_review["browser"], "passed")
+            self.assertEqual(report.delivery_review["visual"], "not_assessed")
             self.assertEqual(report.models_attempted, ("openrouter/openrouter/free",))
             self.assertIn("app/index.html", report.files_modified)
             self.assertTrue(Path(tmp, "app", "index.html").is_file())
@@ -196,7 +203,7 @@ class TestWebMissionEndToEnd(unittest.TestCase):
                 max_iterations=4,
                 project_name="Google Demo",
             )
-            deadline = time.time() + 3
+            deadline = time.time() + 15
             record = execution
             while record.status not in {"completed", "failed", "blocked"} and time.time() < deadline:
                 time.sleep(0.02)

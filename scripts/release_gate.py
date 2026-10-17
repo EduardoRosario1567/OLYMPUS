@@ -32,7 +32,7 @@ REPORT = ROOT / ".olympus" / "qa" / "release-gate.json"
 def run_gate(name: str, command: list[str]) -> dict:
     started = time.monotonic()
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT)
+    env["PYTHONPATH"] = os.pathsep.join((str(ROOT), str(ROOT / "backend")))
     process = subprocess.run(
         command,
         cwd=ROOT,
@@ -54,9 +54,11 @@ def run_gate(name: str, command: list[str]) -> dict:
 
 def main() -> int:
     gates = [
+        ("actual-container-isolation", [sys.executable, "scripts/container_isolation_gate.py"]),
+        ("actual-preview-isolation-frameworks", [sys.executable, "scripts/preview_isolation_gate.py"]),
         (
             "unit-and-contract-regression",
-            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"],
+            [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],
         ),
         ("core-failover-checkpoint-e2e", [sys.executable, "scripts/core_runtime_e2e.py"]),
         ("provider-matrix-mission-e2e", [sys.executable, "scripts/provider_matrix_e2e.py"]),

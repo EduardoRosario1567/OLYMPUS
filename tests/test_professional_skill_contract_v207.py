@@ -34,7 +34,7 @@ blockquote{margin:3rem 0;padding:1.5rem;border-left:3px solid var(--accent);colo
 <article class="card"><h3>Segurança</h3><p>Controles e versões preservam cada etapa importante do seu projeto.</p></article>
 <article class="card"><h3>Qualidade</h3><p>Revisões objetivas transformam requisitos em experiências consistentes.</p></article></div></section>
 <section><h2>Confiança de quem constrói conosco</h2><blockquote>“A Olympus tornou nosso processo claro e entregou uma experiência que nossos clientes realmente entendem.” — Marina, diretora de produto</blockquote></section>
-<section id="contato"><h2>Pronto para começar?</h2><p>Conte seu objetivo e receba um caminho claro para a próxima entrega.</p><button type="button">Solicitar contato</button></section></main>
+<section id="contato"><h2>Pronto para começar?</h2><p>Conte seu objetivo e receba um caminho claro para a próxima entrega.</p><button type="button" onclick="this.nextElementSibling.hidden=false">Solicitar contato</button><p hidden>Contato demonstrativo aberto.</p></section></main>
 <footer>Olympus · Tecnologia com propósito · Todos os direitos reservados.</footer></body></html>"""
 
 

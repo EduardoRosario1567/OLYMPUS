@@ -8,6 +8,7 @@ from typing import Optional
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 from olympus.agent.output_compactor import compact_output
+from olympus.agent.container_execution import ContainerExecutor
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,8 @@ class TargetedTestRunner:
     Runs only explicitly supplied Python unittest modules.
 
     No shell.
-    Project test modules are executable code. The child receives a minimal
-    environment and a temporary home; this is not an OS sandbox.
+    Project test modules are executable code. Execution requires a local
+    container runtime and an approved image; no host fallback is allowed.
     """
 
     def __init__(self, cwd: Optional[str] = None) -> None:
@@ -40,7 +41,15 @@ class TargetedTestRunner:
         if not test_modules:
             raise ValueError("at least one test module is required")
 
+        # Trusted backend configuration; default remains the verified local
+        # ContainerExecutor. An unknown provider NEVER falls back to host.
+        provider = os.environ.get("OLYMPUS_ISOLATED_TEST_PROVIDER", "docker").strip().lower()
+        if provider not in {"docker", "e2b"}:
+            raise ValueError("BLOCKED: unsupported isolated test provider")
+
         if len(test_modules) == 1 and test_modules[0].startswith("shell:"):
+            if provider != "docker":
+                raise ValueError("BLOCKED: shell checks require local container")
             target = test_modules[0][len("shell:"):]
 
             if (
@@ -78,6 +87,23 @@ class TargetedTestRunner:
                 raise ValueError(
                     "unsafe test module: %s" % module
                 )
+
+        if provider == "e2b":
+            # Explicit opt-in and authorization are checked again at the
+            # remote boundary, BEFORE any sandbox is created or charged.
+            if self.cwd is None:
+                raise ValueError("BLOCKED: remote test requires a workspace")
+            if len(test_modules) != 1:
+                raise ValueError("BLOCKED: remote tests require exactly one module")
+            from scripts.remote_e2b_unittest_runner import execute
+            report = execute(self.cwd, test_modules[0], timeout=timeout_seconds)
+            return TestRunResult(
+                success=report.get("status") == "DONE" and report.get("exit_code") == 0,
+                command=("e2b", "python3", "-m", "unittest", test_modules[0]),
+                returncode=report.get("exit_code", 125),
+                stdout=compact_output(report.get("stdout") or "").text,
+                stderr=compact_output(report.get("stderr") or report.get("reason") or "").text,
+            )
 
         command = (
             sys.executable,
@@ -125,20 +151,4 @@ class TargetedTestRunner:
             )
 
     def _run(self, command: Tuple[str, ...], timeout_seconds: int):
-        # Never inherit provider keys, JWTs, proxy credentials, custom variables,
-        # or Python startup hooks from the application process.
-        with tempfile.TemporaryDirectory(prefix="olympus-test-home-") as home:
-            env = {
-                "PATH": os.defpath,
-                "HOME": home,
-                "TMPDIR": home,
-                "PYTHONPATH": self.cwd or os.getcwd(),
-                "PYTHONNOUSERSITE": "1",
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONIOENCODING": "utf-8",
-                "LANG": "C.UTF-8",
-            }
-            return subprocess.run(
-                command, capture_output=True, text=True,
-                timeout=timeout_seconds, shell=False, cwd=self.cwd, env=env,
-            )
+        return ContainerExecutor().run(self.cwd or os.getcwd(), command, timeout_seconds)

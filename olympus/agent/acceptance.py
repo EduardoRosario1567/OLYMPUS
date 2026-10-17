@@ -13,6 +13,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+from olympus.agent.container_execution import ContainerExecutor
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -189,10 +191,11 @@ def detect_test_command(root) -> Optional[List[str]]:
     return [sys.executable, "-m", "unittest", "discover", "-q"]
 
 
-def _scrubbed_env(root: Path) -> Dict[str, str]:
+def _scrubbed_env(root: Path, home: str) -> Dict[str, str]:
     # Tests run agent-written code. Never hand it the backend's provider keys.
-    keep = ("PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")
+    keep = ("LANG", "LC_ALL", "SYSTEMROOT")
     env = {k: os.environ[k] for k in keep if k in os.environ}
+    env.update(PATH=os.defpath, HOME=home, TMPDIR=home, TEMP=home, TMP=home, PYTHONNOUSERSITE="1")
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["PYTHONPATH"] = str(root)
     return env
@@ -202,16 +205,14 @@ def run_tests(root, command: Optional[Sequence[str]], timeout: int = TEST_TIMEOU
     if not command:
         return {"ran": False, "returncode": None, "tail": "no runnable python tests found in the workspace"}
     try:
-        proc = subprocess.run(
-            list(command), cwd=str(root), env=_scrubbed_env(Path(root)),
-            capture_output=True, text=True, timeout=timeout, shell=False,
-        )
+        proc = ContainerExecutor().run(root, command, timeout)
     except subprocess.TimeoutExpired:
         return {"ran": True, "returncode": None, "tail": "test run exceeded %ds" % timeout}
     except OSError as exc:
         return {"ran": False, "returncode": None, "tail": "could not start tests: %s" % exc}
     output = ((proc.stdout or "") + (proc.stderr or "")).strip()
-    return {"ran": True, "returncode": proc.returncode, "tail": output[-1500:]}
+    return {"ran": getattr(proc, "execution_started", proc.returncode != 125),
+            "returncode": proc.returncode, "tail": output[-1500:]}
 
 
 class TestsPass(Check):

@@ -3,11 +3,13 @@ from pathlib import Path
 from typing import Any
 
 from olympus.agent.actions import ActionType, AgentAction
+from olympus.agent.action_normalizer import normalize_patch_payload
 from olympus.agent.autonomy import AutonomyDecision, AutonomyPolicy
 from olympus.agent.patch_engine import PatchEngine, PatchRequest
 from olympus.agent.safe_apply import apply
 from olympus.agent.test_runner import TargetedTestRunner
 from olympus.agent.delivery_sources import DeliverySources
+from olympus.agent.asset_import import import_asset
 
 
 @dataclass(frozen=True)
@@ -46,10 +48,33 @@ class ActionExecutor:
         if policy.decision != AutonomyDecision.ALLOW:
             return ActionObservation(False, action, error=policy.reason, metadata={"autonomy": policy.decision.value})
         try:
+            metadata = {}
             if action.type == ActionType.READ_FILE:
-                output = self._safe_path(action.target).read_text(encoding="utf-8")
+                path = self._safe_path(action.target)
+                if path.stat().st_size > 2 * 1024 * 1024:
+                    raise ValueError("read_file exceeds the 2 MiB text limit")
+                text = path.read_text(encoding="utf-8")
+                if isinstance(action.payload, dict):
+                    start = action.payload.get("start_line", 1)
+                    count = action.payload.get("max_lines", 40)
+                    if (type(start) is not int or type(count) is not int
+                            or start < 1 or not 1 <= count <= 100):
+                        raise ValueError("read_file requires start_line>=1 and max_lines=1..100")
+                    lines = text.splitlines(keepends=True)
+                    selected = lines[start - 1:start - 1 + count]
+                    output = "".join(selected)
+                    metadata["read_range"] = {
+                        "start_line": start, "end_line": start - 1 + len(selected),
+                        "total_lines": len(lines),
+                        "next_start_line": start + len(selected) if start - 1 + len(selected) < len(lines) else None,
+                    }
+                else:
+                    output = text
             elif action.type == ActionType.RESEARCH_SOURCES:
                 output = DeliverySources().search(action.target, action.payload)
+            elif action.type == ActionType.IMPORT_ASSET:
+                output = import_asset(self.root, action.target, action.payload)
+                metadata["files_modified"] = [action.target, action.target + ".source.json"]
             elif action.type == ActionType.SEARCH_CODE:
                 query = str(action.payload or "")
                 output = []
@@ -72,8 +97,10 @@ class ActionExecutor:
                 payload = "=== FILE: %s ===\n%s" % (action.target, content)
                 output = apply(str(self.root), payload, [action.target])
             elif action.type == ActionType.PATCH_FILE:
-                data = dict(action.payload or {})
-                output = self.patch_engine.apply(PatchRequest(file=action.target, **data))
+                data = normalize_patch_payload(action.payload)
+                output = self.patch_engine.apply(
+                    PatchRequest(file=action.target, **data)
+                )
             elif action.type == ActionType.RUN_TEST:
                 modules = action.payload if isinstance(action.payload, (list, tuple)) else [str(action.payload)]
                 output = self.test_runner.run_unittest(modules)
@@ -86,6 +113,6 @@ class ActionExecutor:
                 output = action.payload or "finished"
             else:
                 return ActionObservation(False, action, error="unsupported action")
-            return ActionObservation(True, action, output=output)
+            return ActionObservation(True, action, output=output, metadata=metadata)
         except Exception as exc:
             return ActionObservation(False, action, error=str(exc))

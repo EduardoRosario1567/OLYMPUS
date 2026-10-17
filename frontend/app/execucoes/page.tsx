@@ -8,8 +8,8 @@ import { useRequireAuth } from "@/hooks/useAuth";
 import { api } from "@/services/api";
 import type { CloudExecution } from "@/services/api";
 
-const STATUS_OPCOES = ["queued", "running", "verifying", "completed", "failed", "blocked", "cancelled"];
-const STATUS_LABEL: Record<string, string> = { queued: "Na fila", running: "Construindo", verifying: "Verificando", completed: "Concluída", failed: "Interrompida", blocked: "Aguardando", cancelled: "Cancelada", waiting_decision: "Aguardando decisão" };
+const STATUS_OPCOES = ["queued", "running", "verifying", "completed", "failed", "blocked", "cancelled", "waiting_decision", "paused_capacity"];
+const STATUS_LABEL: Record<string, string> = { queued: "Na fila", running: "Construindo", verifying: "Verificando", completed: "Concluída", failed: "Interrompida", blocked: "Aguardando", cancelled: "Cancelada", paused_capacity: "Pausada por capacidade", waiting_decision: "Aguardando decisão" };
 
 function formatarHorario(value: number) {
   return new Date(value * 1000).toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
@@ -46,6 +46,7 @@ function ExecucoesConteudo() {
 
         <div className="mb-4 flex gap-2">
           <select
+            aria-label="Filtrar histórico por status"
             value={statusFiltro}
             onChange={(e) => setStatusFiltro(e.target.value)}
             className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-zinc-300"
