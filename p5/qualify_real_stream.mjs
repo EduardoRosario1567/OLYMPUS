@@ -59,9 +59,11 @@ async function run(){
       'x-olympus-p5-internal':process.env.OLYMPUS_P5_GATE_TOKEN
     },
     body:JSON.stringify({prompt,model:'openai/qwen2.5-coder:0.5b',isEdit:false,context:{}}),
-    signal:AbortSignal.timeout(360000),
+    signal:AbortSignal.timeout(180000),
   });
   report.open_lovable_stream.http_status=response.status;
+  report.open_lovable_stream.state='REQUEST_STARTED';
+  save();
   if(!response.ok)throw Error('ORIGINAL_STREAM_ENDPOINT_REJECTED_'+response.status);
   if(!response.body)throw Error('EMPTY_STREAM');
   const reader=response.body.getReader();
@@ -78,6 +80,13 @@ async function run(){
       if(raw.length>maxRaw)throw Error('GENERATED_RESPONSE_TOO_LARGE');
     }
     if(item.type==='error')errors.push(String(item.message||'provider error').slice(0,300));
+    if(numEvents%5===0){
+      report.open_lovable_stream={http_status:response.status,state:'STREAM_IN_PROGRESS',
+        event_count:numEvents,raw_characters:raw.length,raw_sha256:digest(raw),
+        errors:errors.slice(0,5)};
+      fs.writeFileSync(path.join(RESULTS,'original-stream.txt'),raw,'utf-8');
+      save();
+    }
   };
   for(;;){
     const {value,done}=await reader.read();
