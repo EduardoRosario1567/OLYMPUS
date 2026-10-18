@@ -26,5 +26,8 @@
     "tailwindcss": "4.3.3",
     "typescript": "^5.4.0",
     "@tailwindcss/postcss": "4.3.3"
+  },
+  "overrides": {
+    "source-map-js": "1.2.2"
   }
 }
