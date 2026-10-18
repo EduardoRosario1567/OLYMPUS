@@ -89,6 +89,80 @@ jobs:
             echo 'UNSAFE: staging started without JWT secret'; exit 1
           fi
           echo 'Staging JWT startup guard rejects missing secret'
+      - name: Verify project creation persists across backend restart
+        run: |
+          set -euo pipefail
+          ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          JWT_SECRET="$(openssl rand -hex 48)"
+          docker network create olympus-persist-ci
+          docker volume create olympus-persist-data
+          docker run -d --name olympus-persist-backend --network olympus-persist-ci \
+            -p 127.0.0.1:18082:8000 -v olympus-persist-data:/data \
+            -e OLYMPUS_ENV=staging \
+            -e OLYMPUS_CLOUD_DATA_DIR=/data \
+            -e OLYMPUS_ADMIN_EMAIL=ci-admin@example.invalid \
+            -e "OLYMPUS_ADMIN_SENHA=$ADMIN_PASSWORD" \
+            -e "OLYMPUS_JWT_SECRET=$JWT_SECRET" \
+            -e OLYMPUS_CLOUD_WORKERS=1 \
+            -e OLYMPUS_OPEN_LOVABLE_ENABLED=0 \
+            -e OLYMPUS_MISSION_SANDBOX_VERIFIED=0 \
+            olympus-beta-backend:ci
+          for i in $(seq 1 55); do
+            if curl -fsS http://127.0.0.1:18082/health -o /dev/null; then break; fi
+            sleep 1
+          done
+          ADMIN_PASSWORD_FOR_TEST="$ADMIN_PASSWORD" python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          base="http://127.0.0.1:18082"
+          def call(method, path, body=None, token=None):
+              headers={"Content-Type":"application/json"}
+              if token:
+                  headers["Authorization"]="Bearer "+token
+              raw=json.dumps(body).encode() if body is not None else None
+              req=urllib.request.Request(base+path,data=raw,headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=12) as response:
+                  return response.status,json.loads(response.read())
+          status,login=call("POST","/auth/login",{"email":"ci-admin@example.invalid","senha":os.environ["ADMIN_PASSWORD_FOR_TEST"]})
+          assert status==200
+          token=login["access_token"]
+          status,created=call("POST","/cloud/projects",{"name":"Projeto de persistência CI"},token)
+          assert status==201 and created["project_id"]
+          status,listed=call("GET","/cloud/projects",token=token)
+          assert any(p["project_id"]==created["project_id"] for p in listed["projects"])
+          with open("/tmp/olympus-persist-result.json","w",encoding="utf-8") as handle:
+              json.dump({"project_id":created["project_id"],"token":token},handle)
+          os.chmod("/tmp/olympus-persist-result.json",0o600)
+          print("CLOUD_PROJECT_CREATED_FOR_RESTART_TEST")
+          PY
+          docker restart olympus-persist-backend >/dev/null
+          for i in $(seq 1 55); do
+            if curl -fsS http://127.0.0.1:18082/health -o /dev/null; then break; fi
+            sleep 1
+          done
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error
+          with open("/tmp/olympus-persist-result.json",encoding="utf-8") as handle:
+              state=json.load(handle)
+          headers={"Authorization":"Bearer "+state["token"]}
+          req=urllib.request.Request("http://127.0.0.1:18082/cloud/projects",headers=headers)
+          with urllib.request.urlopen(req,timeout=12) as response:
+              data=json.load(response)
+          assert any(p["project_id"]==state["project_id"] for p in data["projects"])
+          req=urllib.request.Request("http://127.0.0.1:18082/cloud/missions",
+              data=json.dumps({"project_id":state["project_id"],"task":"Crie um site"}).encode(),
+              headers={**headers,"Content-Type":"application/json"},method="POST")
+          try:
+              urllib.request.urlopen(req,timeout=12)
+          except urllib.error.HTTPError as error:
+              assert error.code==503, f"Unsafe mission bypass: {error.code}"
+          else:
+              raise AssertionError("Unaudited cloud mission unexpectedly started")
+          print("CLOUD_PROJECT_PERSISTENCE_OK; MISSION_GATE_503_OK")
+          PY
+          rm -f /tmp/olympus-persist-result.json
+          docker rm -f olympus-persist-backend >/dev/null
+          docker network rm olympus-persist-ci >/dev/null
+          docker volume rm olympus-persist-data >/dev/null
       - name: Container logs and cleanup
         if: always()
         run: |
