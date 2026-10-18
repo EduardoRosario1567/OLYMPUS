@@ -9,6 +9,7 @@ from unittest.mock import patch
 from olympus.integrations.open_lovable import (
     OpenLovableClient, OpenLovableError, OpenLovableWebDeveloper,
     _files_from_generated, _safe_path, _validated_base, _verify_export, _SESSION_LOCK,
+    _pilot_process_lock,
 )
 
 
@@ -176,6 +177,17 @@ class OpenLovableContractTests(unittest.TestCase):
                 'os.environ', {'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '0'}):
             runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient())
             self.assertEqual(runner.run('Crie um site').status, 'blocked')
+
+    @patch.dict('os.environ', {'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1'})
+    def test_pilot_does_not_reenter_held_host_lease(self):
+        with tempfile.TemporaryDirectory() as root, patch.dict(
+                'os.environ', {'OLYMPUS_OPEN_LOVABLE_LOCK_DIR': str(Path(root) / 'locks')}):
+            runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient())
+            with _pilot_process_lock():
+                result = runner.run('Crie um site para Rosales Café')
+            self.assertEqual(result.status, 'blocked')
+            self.assertIn('local worker', result.error)
+            self.assertFalse((Path(root) / 'src/App.jsx').exists())
 
     @patch.dict('os.environ', {'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1'})
     def test_simultaneous_missions_blocked(self):
