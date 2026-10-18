@@ -10,7 +10,7 @@ from app.core.tenancy import identity_for, Identity
 from app.core.saas import PLATFORM
 
 _DEVELOPMENT_SECRET = "dev-secret-troque-em-producao-0123456789abcdef0123456789"
-SECRET_KEY = os.environ.get("OLYMPUS_JWT_SECRET", _DEVELOPMENT_SECRET)
+SECRET_KEY = os.environ.get("OLYMPUS_JWT_SECRET") or _DEVELOPMENT_SECRET
 ALGORITHM = "HS256"
 EXPIRA_EM_SEGUNDOS = 60 * 60 * 8
 
