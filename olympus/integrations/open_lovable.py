@@ -34,6 +34,13 @@ _MAX_FILES = 80
 _ALLOWED_EXT = {'.jsx', '.tsx', '.js', '.ts', '.css', '.html', '.json', '.svg', '.md'}
 
 
+
+def pilot_tenant_authorized(actual_tenant: str | None, allowed_tenant: str | None) -> bool:
+    """Explicit tenant allowlist before opening a shared experimental upstream."""
+    return bool(actual_tenant and allowed_tenant and
+                str(actual_tenant).strip() == str(allowed_tenant).strip())
+
+
 def _validated_base(raw: str) -> str:
     parsed = urlsplit(raw.strip())
     host = (parsed.hostname or '').lower()
