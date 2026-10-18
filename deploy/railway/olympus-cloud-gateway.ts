@@ -45,7 +45,7 @@ function validBasic(request) {
   const user = Bun.env.OLYMPUS_CLOUD_EDGE_USER || "";
   const password = Bun.env.OLYMPUS_CLOUD_EDGE_PASSWORD || "";
   const auth = request.headers.get("authorization") || "";
-  if (!user || user.includes(":") || password.length < 20 || !auth.startsWith("Basic ")) return false;
+  if (!user || user.includes(":") || password.length < 12 || !auth.startsWith("Basic ")) return false;
   try {
     const decoded = Buffer.from(auth.slice(6).trim(), "base64").toString("utf8");
     const i = decoded.indexOf(":");
