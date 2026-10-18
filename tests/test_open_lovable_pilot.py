@@ -1,4 +1,6 @@
 """Offline contract tests for the opt-in Open Lovable pilot adapter."""
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,7 +8,7 @@ from unittest.mock import patch
 
 from olympus.integrations.open_lovable import (
     OpenLovableClient, OpenLovableError, OpenLovableWebDeveloper,
-    _files_from_generated, _safe_path, _validated_base, _SESSION_LOCK,
+    _files_from_generated, _safe_path, _validated_base, _verify_export, _SESSION_LOCK,
 )
 
 
@@ -18,19 +20,52 @@ class FakeRunner:
 class FakeClient:
     model = 'llama-3.3-70b-versatile'
 
-    def __init__(self, *, invalid=False, remote_error=False, bad_build=False):
+    def __init__(self, *, invalid=False, remote_error=False, bad_build=False,
+                 bad_export=False, missing_export=False, changed_sandbox=False,
+                 malicious_export=False):
         self.calls = []
         self.invalid = invalid
         self.remote_error = remote_error
         self.bad_build = bad_build
+        self.bad_export = bad_export
+        self.missing_export = missing_export
+        self.changed_sandbox = changed_sandbox
+        self.malicious_export = malicious_export
 
-    def json(self, endpoint, payload):
+    def json(self, endpoint, payload=None, *, max_bytes=128 * 1024):
         self.calls.append(endpoint)
         if endpoint.endswith('run-command-v2'):
             return {
                 'success': True, 'exitCode': 0,
                 'output': 'STDOUT:\nVite build complete\nReturn code: ' + ('1' if self.bad_build else '0') + '\n',
             }
+        if endpoint.endswith('sandbox-status'):
+            return {'success': True, 'active': True, 'healthy': True,
+                    'sandboxData': {'sandboxId': 'other-sandbox' if self.changed_sandbox else 'sandbox-01'}}
+        if endpoint.endswith('olympus-export'):
+            if self.missing_export:
+                raise OpenLovableError('404 upstream endpoint')
+            sources = {
+                'src/App.jsx': 'export default function App(){ return <h1>Rosales Café</h1> }\n',
+                'src/main.jsx': "import App from './App.jsx';\n",
+                'index.html': '<!doctype html><html><body><div id="root"></div></body></html>\n',
+                'package.json': json.dumps({'name': 'rosales', 'scripts': {'build': 'vite build'}}),
+            }
+            if self.malicious_export:
+                sources['src/../secret.jsx'] = 'secret'
+            files = [
+                {'path': name, 'content': value,
+                 'sha256': hashlib.sha256(value.encode('utf-8')).hexdigest()}
+                for name, value in sorted(sources.items())
+            ]
+            project_hash = hashlib.sha256()
+            for entry in files:
+                project_hash.update(entry['path'].encode('utf-8') + b'\0')
+                project_hash.update(bytes.fromhex(entry['sha256']))
+            if self.bad_export:
+                files[0]['sha256'] = '0' * 64
+            return {'success': True, 'sandboxId': 'sandbox-01',
+                    'files': files, 'sha256': project_hash.hexdigest()}
         return {'success': True, 'sandboxId': 'sandbox-01'}
 
     def sse(self, endpoint, payload):
@@ -62,7 +97,7 @@ class OpenLovableContractTests(unittest.TestCase):
     def test_path_traversal_and_no_partial_tags(self):
         for path in ('../secrets.json', 'src/../../secret.ts', '/tmp/x.jsx',
                      'src\\evil.jsx', 'README.md', 'src/sub/../x.jsx',
-                     'src/.env', 'src/file.py'):
+                     'src/.env', 'src/.env.jsx', 'src/file.py'):
             with self.subTest(path=path), self.assertRaises(OpenLovableError):
                 _safe_path(path)
         with self.assertRaises(OpenLovableError):
@@ -81,8 +116,10 @@ class OpenLovableContractTests(unittest.TestCase):
             self.assertIn('Rosales Café', (Path(root) / 'src/App.jsx').read_text())
             self.assertTrue((Path(root) / 'index.html').exists())
             self.assertTrue((Path(root) / 'package.json').exists())
-            self.assertEqual(len(client.calls), 4)
+            self.assertEqual(len(client.calls), 7)
             self.assertIn('/api/run-command-v2', client.calls)
+            self.assertIn('/api/olympus-export', client.calls)
+            self.assertEqual(len(result.delivery_review['export_sha256']), 64)
             self.assertIn('sandbox_react_build', result.tests_run)
             self.assertEqual(events[-1]['event'], 'open_lovable_files_ready')
 
@@ -97,6 +134,28 @@ class OpenLovableContractTests(unittest.TestCase):
             self.assertEqual(runner.run('Crie um site profissional').status, 'blocked')
             runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient(bad_build=True))
             self.assertEqual(runner.run('Crie um site profissional').status, 'blocked')
+
+    @patch.dict('os.environ', {'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1'})
+    def test_export_contract_rejects_incomplete_or_tampered_snapshots(self):
+        with tempfile.TemporaryDirectory() as root:
+            for mode in ({'missing_export': True}, {'bad_export': True},
+                         {'changed_sandbox': True}, {'malicious_export': True}):
+                with self.subTest(mode=mode):
+                    client = FakeClient(**mode)
+                    runner = OpenLovableWebDeveloper(root, FakeRunner(), client=client)
+                    result = runner.run('Crie um site profissional')
+                    self.assertEqual(result.status, 'blocked')
+                    self.assertFalse((Path(root) / 'src/App.jsx').exists())
+                    self.assertFalse((Path(root) / 'index.html').exists())
+
+    def test_export_rejects_missing_entrypoint_and_manifest_drift(self):
+        client = FakeClient()
+        payload = client.json('/api/olympus-export')
+        with self.assertRaises(OpenLovableError):
+            _verify_export(payload, 'wrong-sandbox', {'src/App.jsx'})
+        payload['files'] = [f for f in payload['files'] if f['path'] != 'index.html']
+        with self.assertRaises(OpenLovableError):
+            _verify_export(payload, 'sandbox-01', {'src/App.jsx'})
 
     @patch.dict('os.environ', {
         'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1', 'OLYMPUS_ENV': 'production',
