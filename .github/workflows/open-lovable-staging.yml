@@ -1,0 +1,52 @@
+name: Open Lovable staging snapshot (isolated, no credentials)
+
+on:
+  push:
+    branches:
+      - staging/open-lovable-snapshot-build
+    paths:
+      - integrations/open_lovable_upstream/**
+      - .github/workflows/open-lovable-staging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build patched pinned upstream image
+        run: docker build -f integrations/open_lovable_upstream/Dockerfile.staging -t olympus-open-lovable-staging:ci .
+      - name: Boot isolated process (no user credentials or provider keys)
+        run: |
+          docker run -d --name open-lovable-ci -p 127.0.0.1:18081:3000 \
+            -e OLYMPUS_BRIDGE_EXPORT_TOKEN=ci-only-ephemeral-not-a-production-token-12345 \
+            olympus-open-lovable-staging:ci
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:18081/ > /dev/null; then
+              echo 'Open Lovable staging process healthy'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs open-lovable-ci
+          exit 1
+      - name: Verify the protected snapshot HTTP contract
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/api/olympus-export \
+            -H 'Content-Type: application/json' -d '{"sandboxId":"pilot-fixture-01"}')
+          test "$STATUS" = '401' || (echo "Expected unauthenticated=401, got $STATUS"; exit 1)
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/api/olympus-export \
+            -H 'Content-Type: application/json' \
+            -H 'x-olympus-bridge-token: ci-only-ephemeral-not-a-production-token-12345' \
+            -d '{"sandboxId":"pilot-fixture-01"}')
+          test "$STATUS" = '409' || (echo "Expected no-active-sandbox=409, got $STATUS"; exit 1)
+          echo 'Bridge denies unauthenticated access; no active sandbox cannot be exported.'
+      - name: Logs and cleanup
+        if: always()
+        run: |
+          docker logs open-lovable-ci 2>/dev/null | tail -n 100 || true
+          docker rm -f open-lovable-ci 2>/dev/null || true

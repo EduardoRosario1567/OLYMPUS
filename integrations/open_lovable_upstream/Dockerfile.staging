@@ -1,0 +1,23 @@
+# Build an immutable, patched Open Lovable snapshot; never pull latest at runtime.
+# Upstream commit is fixed; production rollout still blocked by global sandbox state.
+FROM node:22-bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN git init -q && \
+    git remote add origin https://github.com/firecrawl/open-lovable.git && \
+    git fetch -q --depth 1 origin 806b8072f28afea11fa2b028cac1449eff74c511 && \
+    git checkout -q --detach FETCH_HEAD && \
+    test "$(git rev-parse HEAD)" = "806b8072f28afea11fa2b028cac1449eff74c511" && \
+    rm -rf .git
+COPY integrations/open_lovable_upstream/app/api/olympus-export/route.ts /app/app/api/olympus-export/route.ts
+RUN npm ci --no-audit --no-fund
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:22-bookworm-slim AS runtime
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+WORKDIR /app
+COPY --from=build /app /app
+USER node
+EXPOSE 3000
+CMD ["npm","run","start"]
