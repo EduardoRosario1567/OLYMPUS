@@ -5,6 +5,7 @@ replica; the single-process lock below is not a distributed lock.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -109,10 +110,11 @@ class OpenLovableClient:
         except (HTTPError, URLError, TimeoutError) as exc:
             raise OpenLovableError(f'Upstream transport failed ({type(exc).__name__})') from None
 
-    def json(self, path: str, payload: dict | None = None) -> dict:
+    def json(self, path: str, payload: dict | None = None, *, max_bytes: int = 128 * 1024) -> dict:
+        limit = min(max(int(max_bytes), 1024), 5 * 1024 * 1024)
         with self._open(path, payload) as response:
-            data = response.read(128 * 1024 + 1)
-        if len(data) > 128 * 1024:
+            data = response.read(limit + 1)
+        if len(data) > limit:
             raise OpenLovableError('Upstream JSON exceeds limit')
         try:
             result = json.loads(data)
@@ -153,6 +155,54 @@ class OpenLovableClient:
         return completed
 
 
+def _verify_export(response: dict, sandbox_id: str, proposed: set[str]) -> tuple[dict[Path, str], str]:
+    """Validate an authoritative UTF-8 source snapshot; reject missing/unsafe files."""
+    if response.get('success') is not True or response.get('sandboxId') != sandbox_id:
+        raise OpenLovableError('Sandbox export identity mismatch')
+    raw = response.get('files')
+    if not isinstance(raw, list) or not 1 <= len(raw) <= _MAX_FILES:
+        raise OpenLovableError('Invalid export file count')
+    accepted: dict[Path, str] = {}
+    total = 0
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get('path'), str):
+            raise OpenLovableError('Malformed exported file')
+        path = _safe_path(item['path'])
+        if path in accepted:
+            raise OpenLovableError('Duplicate exported file')
+        body, checksum = item.get('content'), item.get('sha256')
+        if not isinstance(body, str) or not isinstance(checksum, str):
+            raise OpenLovableError('Exported file lacks integrity evidence')
+        encoded = body.encode('utf-8')
+        if len(encoded) > 512 * 1024:
+            raise OpenLovableError('Exported file exceeds size limit')
+        total += len(encoded)
+        if total > _MAX_GENERATED:
+            raise OpenLovableError('Exported project exceeds size limit')
+        if hashlib.sha256(encoded).hexdigest() != checksum:
+            raise OpenLovableError('Exported file checksum mismatch')
+        accepted[path] = body
+    names = {str(x) for x in accepted}
+    if not proposed.issubset(names):
+        raise OpenLovableError('Sandbox export is missing generated files')
+    if ('index.html' not in names or 'package.json' not in names
+            or not names.intersection({'src/main.jsx', 'src/main.tsx'})):
+        raise OpenLovableError('Sandbox export lacks Vite entrypoints')
+    try:
+        package = json.loads(accepted[Path('package.json')])
+    except (KeyError, ValueError, TypeError):
+        raise OpenLovableError('Invalid exported package manifest') from None
+    if not isinstance(package, dict) or 'build' not in package.get('scripts', {}):
+        raise OpenLovableError('Exported project lacks build script')
+    digest = hashlib.sha256()
+    for path in sorted(accepted, key=str):
+        digest.update(str(path).encode('utf-8') + b'\0')
+        digest.update(hashlib.sha256(accepted[path].encode('utf-8')).digest())
+    if digest.hexdigest() != response.get('sha256'):
+        raise OpenLovableError('Exported project manifest checksum mismatch')
+    return accepted, digest.hexdigest()
+
+
 class OpenLovableWebDeveloper:
     """Web-only delegate preserving normal OLYMPUS missions for other tasks."""
 
@@ -182,6 +232,15 @@ class OpenLovableWebDeveloper:
         finally:
             _SESSION_LOCK.release()
 
+
+    @staticmethod
+    def _confirm_sandbox(client, sid: str) -> None:
+        result = client.json('/api/sandbox-status')
+        current = result.get('sandboxData')
+        if (not result.get('active') or not result.get('healthy')
+                or not isinstance(current, dict) or current.get('sandboxId') != sid):
+            raise OpenLovableError('Active sandbox changed during mission')
+
     @staticmethod
     def _blocked(task: str, error: str):
         return DeveloperReport(task, 'blocked', False, (), (), (), (), 0, error=error)
@@ -205,7 +264,7 @@ class OpenLovableWebDeveloper:
         code = generated.get('generatedCode')
         if not isinstance(code, str):
             raise OpenLovableError('Generated code missing')
-        files = _files_from_generated(code)
+        proposed_files = _files_from_generated(code)
         applied = client.sse('/api/apply-ai-code-stream', {
             'response': code, 'isEdit': False, 'packages': [], 'sandboxId': sid,
         })
@@ -214,20 +273,35 @@ class OpenLovableWebDeveloper:
             results.get('filesCreated') or results.get('filesUpdated')
         ):
             raise OpenLovableError('Remote sandbox did not apply files')
-        expected_files = {str(p) for p in files}
+        expected_files = {str(p) for p in proposed_files}
         actual_files = {str(p) for p in (
             list(results.get('filesCreated') or ()) + list(results.get('filesUpdated') or ())
         )}
         if not expected_files.issubset(actual_files):
             raise OpenLovableError('Sandbox reported incomplete file application')
-        # The upstream E2B provider may report exitCode=0 even when npm exits
-        # nonzero; require the explicit subprocess Return code marker as well.
+        # The upstream uses global process state: check the sandbox identity
+        # before build and again after the authoritative source export.
+        self._confirm_sandbox(client, sid)
+        # E2B runCommand currently wraps subprocess and reports a generic
+        # success even when npm fails: parse the subprocess return code too.
         build = client.json('/api/run-command-v2', {'command': 'npm run build'})
         output = str(build.get('output') or '')
         if (build.get('success') is not True or build.get('exitCode') != 0
                 or not re.search(r'(?m)^Return code:\s*0\s*$', output)):
             raise OpenLovableError('React build did not pass inside sandbox')
         self.telemetry({'event': 'open_lovable_build_passed', 'sandbox': 'e2b'})
+        # Contract requires a patched dedicated upstream. Vanilla
+        # /api/create-zip references a different global sandbox variable,
+        # and /api/get-sandbox-files also uses the wrong global.
+        try:
+            export = client.json(
+                '/api/olympus-export', {'sandboxId': sid},
+                max_bytes=5 * 1024 * 1024,
+            )
+        except (OpenLovableError, TypeError) as exc:
+            raise OpenLovableError('Sandbox export unavailable or incompatible') from exc
+        files, digest = _verify_export(export, sid, expected_files)
+        self._confirm_sandbox(client, sid)
         root = self.workspace
         root.mkdir(parents=True, exist_ok=True)
         for relative, content in files.items():
@@ -239,34 +313,12 @@ class OpenLovableWebDeveloper:
                 raise OpenLovableError('Refusing generated symlink target')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding='utf-8')
-        main_file = 'src/main.tsx' if (root / 'src/main.tsx').exists() else 'src/main.jsx'
-        if not (root / 'index.html').exists():
-            (root / 'index.html').write_text(
-                '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"/>'
-                '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
-                '</head><body><div id="root"></div>'
-                '<script type="module" src="/' + main_file + '"></script></body></html>\n',
-                encoding='utf-8'
-            )
-        if not (root / 'src/main.jsx').exists() and not (root / 'src/main.tsx').exists():
-            (root / 'src').mkdir(exist_ok=True)
-            (root / 'src/main.jsx').write_text(
-                "import React from 'react';\nimport { createRoot } from 'react-dom/client';\n"
-                "import App from './App." + ("tsx" if (root / 'src/App.tsx').exists() else "jsx") + "';\n"
-                "createRoot(document.getElementById('root')).render(<App />);\n",
-                encoding='utf-8'
-            )
-        if not (root / 'package.json').exists():
-            (root / 'package.json').write_text(json.dumps({
-                'name': 'olympus-lovable-delivery', 'version': '0.1.0', 'private': True,
-                'type': 'module', 'scripts': {'dev': 'vite --host 0.0.0.0', 'build': 'vite build'},
-                'dependencies': {'react': '^19.0.0', 'react-dom': '^19.0.0'},
-                'devDependencies': {'vite': '^6.0.0'},
-            }, indent=2) + '\n', encoding='utf-8')
         output = list(files)
-        for name in ('index.html', 'package.json', 'src/main.jsx'):
-            if Path(name) not in output and (root / name).exists():
-                output.append(Path(name))
+        self.telemetry({
+            'event': 'open_lovable_export_verified',
+            'files': len(files),
+            'sha256': digest,
+        })
         concept = root / 'docs/delivery-concept.md'
         concept.parent.mkdir(parents=True, exist_ok=True)
         if not concept.exists():
@@ -284,5 +336,6 @@ class OpenLovableWebDeveloper:
         return DeveloperReport(
             task, 'completed', True, (client.model,), (), tuple(str(p) for p in output),
             ('sandbox_react_build',), 1,
-            delivery_review={'engine': 'open_lovable', 'build': 'passed_remote', 'browser': 'pending'}
+            delivery_review={'engine': 'open_lovable', 'build': 'passed_remote',
+                             'export_sha256': digest, 'browser': 'pending'}
         )
