@@ -1,0 +1,58 @@
+{
+  "snapshot_sha256": "468395a783b99ad1ac55fd8870bc3e6729932bae4061f7e7959349c6136051f1",
+  "exported_at": "2026-10-18",
+  "files": [
+    {
+      "path": "index.html",
+      "sha256": "adb716a2fadd6918d0bed4ef499c812d4e458ce44c9c18bcac17a64dc04b9d50"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "07cf3d954018a4d2492cd7665da8f7a4742a6a912fc6295354fcd3932fae5392"
+    },
+    {
+      "path": "package.json",
+      "sha256": "e1d3a9f59b2363f17e42775e4f2e149d9acef9f8a909b7c67dd8787f016b7bc1"
+    },
+    {
+      "path": "postcss.config.js",
+      "sha256": "010e8774c76996e28b1f2290d690b3b64f56f2fbe26c747b4419ee0110d0a002"
+    },
+    {
+      "path": "src/App.jsx",
+      "sha256": "1791071253bb1a224f0a4c3466ac0a0871786f1fe9d7b236817f09c7f5cd5bee"
+    },
+    {
+      "path": "src/components/Footer.jsx",
+      "sha256": "c7a44170dbaea85664d319dca723b30b7a8121c9f2028ca27270738a3e53c9b2"
+    },
+    {
+      "path": "src/components/Header.jsx",
+      "sha256": "2adde8432b04f9d64158b440ee5b4e91232267e59cc57b5c1e38e4c752a49f58"
+    },
+    {
+      "path": "src/components/Hero.jsx",
+      "sha256": "90151b2d5de5066a12ea88c35de2c4ff4e80587517097a96cf1edab27aae2c68"
+    },
+    {
+      "path": "src/components/Story.jsx",
+      "sha256": "60f01c66e5ef2592fbdd06479b836156b7c3741e6e9167e8051a7072941da4ee"
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "186419c47e46d1688974fe6d1d4688d7234f1790113a0c1e933526b522c9a04c"
+    },
+    {
+      "path": "src/main.jsx",
+      "sha256": "dfe7f7d0a5d86fe1ab508f0eb8608eb46efeba6819f9bd8ade68d9af6873a739"
+    },
+    {
+      "path": "tailwind.config.js",
+      "sha256": "3dd3712212acbc67849a13a9f1401527495e09a1a12e1c417fac6b4ecf1fe6d4"
+    },
+    {
+      "path": "vite.config.js",
+      "sha256": "2bfddd9ec965aa30f7785cefbc08074e33d6b8acd38c1545807aedc680e07010"
+    }
+  ]
+}
