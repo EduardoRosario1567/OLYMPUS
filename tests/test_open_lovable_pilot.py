@@ -18,13 +18,19 @@ class FakeRunner:
 class FakeClient:
     model = 'llama-3.3-70b-versatile'
 
-    def __init__(self, *, invalid=False, remote_error=False):
+    def __init__(self, *, invalid=False, remote_error=False, bad_build=False):
         self.calls = []
         self.invalid = invalid
         self.remote_error = remote_error
+        self.bad_build = bad_build
 
     def json(self, endpoint, payload):
         self.calls.append(endpoint)
+        if endpoint.endswith('run-command-v2'):
+            return {
+                'success': True, 'exitCode': 0,
+                'output': 'STDOUT:\nVite build complete\nReturn code: ' + ('1' if self.bad_build else '0') + '\n',
+            }
         return {'success': True, 'sandboxId': 'sandbox-01'}
 
     def sse(self, endpoint, payload):
@@ -75,7 +81,9 @@ class OpenLovableContractTests(unittest.TestCase):
             self.assertIn('Rosales Café', (Path(root) / 'src/App.jsx').read_text())
             self.assertTrue((Path(root) / 'index.html').exists())
             self.assertTrue((Path(root) / 'package.json').exists())
-            self.assertEqual(len(client.calls), 3)
+            self.assertEqual(len(client.calls), 4)
+            self.assertIn('/api/run-command-v2', client.calls)
+            self.assertIn('sandbox_react_build', result.tests_run)
             self.assertEqual(events[-1]['event'], 'open_lovable_files_ready')
 
     @patch.dict('os.environ', {'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1'})
@@ -87,6 +95,18 @@ class OpenLovableContractTests(unittest.TestCase):
             self.assertFalse((Path(root) / 'src/App.jsx').exists())
             runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient(remote_error=True))
             self.assertEqual(runner.run('Crie um site profissional').status, 'blocked')
+            runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient(bad_build=True))
+            self.assertEqual(runner.run('Crie um site profissional').status, 'blocked')
+
+    @patch.dict('os.environ', {
+        'OLYMPUS_OPEN_LOVABLE_EXCLUSIVE': '1', 'OLYMPUS_ENV': 'production',
+    })
+    def test_production_fails_closed_even_when_exclusive(self):
+        with tempfile.TemporaryDirectory() as root:
+            runner = OpenLovableWebDeveloper(root, FakeRunner(), client=FakeClient())
+            result = runner.run('Crie um site profissional')
+            self.assertEqual(result.status, 'blocked')
+            self.assertIn('production disabled', result.error)
 
     def test_pilot_fails_closed(self):
         with tempfile.TemporaryDirectory() as root, patch.dict(
