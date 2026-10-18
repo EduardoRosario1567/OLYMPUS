@@ -21,14 +21,14 @@ Esse endpoint usa um segredo dedicado e exporta somente fontes UTF-8 seguras, co
 **Nunca colocar tokens no GitHub ou no frontend.** Preservar chaves Groq/E2B existentes.
 
 ## Barreiras reais
-1. **Sessões:** sandbox e conversa globais no upstream. Corrigir por tenant e missão, com isolamento de recursos ou uma instância descartável única por execução. Lock Python não é distribuído, e endpoint com hash não corrige concorrência global.
+1. **Sessões:** sandbox e conversa globais no upstream. Um lock de threads + lease de arquivo POSIX (diretório privado `OLYMPUS_OPEN_LOVABLE_LOCK_DIR`) impede concorrência entre processos no mesmo host, mas NÃO entre réplicas Railway, clientes conectados diretamente ao upstream ou tenants. Corrigir por tenant e missão ou instância descartável única por execução.
 2. **Fontes:** endpoint autenticado de snapshot precisa ser instalado em upstream dedicado e testado com E2B real, sem arquivos ausentes, truncados ou trocados. É obrigatório hash consistente do conteúdo real após o build.
 3. **Qualidade:** React/Vite necessita build independente no snapshot exportado e Playwright real (desktop e mobile), além de verificação visual, acessibilidade, dados, imagens e licenças.
 4. **Confiabilidade e custos:** executar Rosales Café de ponta a ponta com Groq/E2B reais, idempotência, interrupção, retomada, TTL do sandbox, limites de gasto e logs redigidos.
 5. **Deploy:** staging privado, depois rollout com rollback. O Railway atual hospeda Open Lovable e proxy; não é um backend OLYMPUS completo.
 
 ## Evidências disponíveis
-- 9 testes offline de contrato, incluindo exportação ausente, adulterada, caminhos inseguros, troca de sandbox, ausência de token, concorrência e bloqueio em produção.
+- 10 testes offline de contrato, incluindo exportação ausente, adulterada, caminhos inseguros, troca de sandbox, ausência de token, concorrência e bloqueio em produção.
 - CI normal valida backend, frontend, npm audit, interface Playwright e fallback. A nova exportação é um contrato simulado, **não um teste com upstream real**.
 - Tudo fica em branch de trabalho, com PR em rascunho; nenhuma alteração em \`main\` ou deploy automático.
 
