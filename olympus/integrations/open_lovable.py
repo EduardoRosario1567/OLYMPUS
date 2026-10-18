@@ -89,13 +89,15 @@ def _files_from_generated(text: str) -> dict[Path, str]:
 
 
 class OpenLovableClient:
-    def __init__(self, url: str, model: str, *, user: str = '', password: str = '', timeout: int = 180):
+    def __init__(self, url: str, model: str, *, user: str = '', password: str = '',
+                 export_token: str = '', timeout: int = 180):
         self.base = _validated_base(url)
         if not re.fullmatch(r'[a-zA-Z0-9._/-]{2,120}', model):
             raise OpenLovableError('Invalid model identifier')
         self.model = model
         self.timeout = min(max(int(timeout), 5), 240)
         self.user, self.password = user, password
+        self.export_token = export_token
         if self.base.startswith('https://') and not (user and password):
             raise OpenLovableError('HTTPS pilot proxy requires Basic credentials')
 
@@ -105,6 +107,10 @@ class OpenLovableClient:
         if payload is not None:
             headers['Content-Type'] = 'application/json'
             data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        if path == '/api/olympus-export':
+            if len(self.export_token) < 32:
+                raise OpenLovableError('Private export token is not configured')
+            headers['X-Olympus-Bridge-Token'] = self.export_token
         if self.user and self.password:
             token = base64.b64encode(f'{self.user}:{self.password}'.encode()).decode('ascii')
             headers['Authorization'] = 'Basic ' + token
@@ -256,6 +262,7 @@ class OpenLovableWebDeveloper:
             os.environ.get('OLYMPUS_OPEN_LOVABLE_MODEL', ''),
             user=os.environ.get('OLYMPUS_OPEN_LOVABLE_USER', ''),
             password=os.environ.get('OLYMPUS_OPEN_LOVABLE_PASSWORD', ''),
+            export_token=os.environ.get('OLYMPUS_OPEN_LOVABLE_EXPORT_TOKEN', ''),
         )
         self.telemetry({'event': 'open_lovable_started', 'engine': 'open_lovable', 'pilot': True})
         sandbox = client.json('/api/create-ai-sandbox-v2', {})
