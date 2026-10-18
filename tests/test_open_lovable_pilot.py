@@ -93,6 +93,10 @@ class OpenLovableContractTests(unittest.TestCase):
                 _validated_base(bad)
         with self.assertRaises(OpenLovableError):
             OpenLovableClient('https://pilot.up.railway.app', 'good-model')
+        with self.assertRaisesRegex(OpenLovableError, 'export token'):
+            OpenLovableClient('http://localhost:8080', 'good-model').json(
+                '/api/olympus-export', {'sandboxId': 'sandbox-01'}
+            )
 
     def test_path_traversal_and_no_partial_tags(self):
         for path in ('../secrets.json', 'src/../../secret.ts', '/tmp/x.jsx',
