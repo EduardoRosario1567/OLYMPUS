@@ -26,9 +26,11 @@ jobs:
         run: |
           set -euo pipefail
           docker network create olympus-beta-ci
+          docker volume create olympus-beta-ci-data
           ADMIN_PASSWORD="$(openssl rand -hex 24)"
           JWT_SECRET="$(openssl rand -hex 48)"
           docker run -d --name olympus-ci-backend --network olympus-beta-ci \
+            -v olympus-beta-ci-data:/data \
             --network-alias olympus-cloud-backend.railway.internal \
             -e OLYMPUS_ENV=staging \
             -e OLYMPUS_CLOUD_DATA_DIR=/data \
@@ -94,3 +96,4 @@ jobs:
           docker logs olympus-ci-frontend 2>/dev/null | tail -n 50 || true
           docker rm -f olympus-ci-frontend olympus-ci-backend 2>/dev/null || true
           docker network rm olympus-beta-ci 2>/dev/null || true
+          docker volume rm olympus-beta-ci-data 2>/dev/null || true
