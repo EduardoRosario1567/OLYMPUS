@@ -111,6 +111,9 @@ export default function MissaoPage() {
   const requestedProjectId = searchParams.get("project_id");
   const [projects, setProjects] = useState<CloudProject[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [showProjectCreation, setShowProjectCreation] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("Meu primeiro projeto");
+  const [creatingProject, setCreatingProject] = useState(false);
   const [task, setTask] = useState("");
   const [submittedTask, setSubmittedTask] = useState("");
   const [attachments, setAttachments] = useState<CloudAttachment[]>([]);
@@ -156,7 +159,7 @@ export default function MissaoPage() {
         setErro("O projeto selecionado não foi encontrado.");
       } else {
         setProjectId("");
-        setErro("Crie um projeto na pasta Projetos da barra lateral para começar.");
+        setErro(null);
       }
     }).catch(() => setErro("Não consegui carregar seus projetos agora."));
   }, [pronto, requestedProjectId]);
@@ -255,6 +258,33 @@ export default function MissaoPage() {
   const selectedProject = useMemo(() => projects.find((project) => project.project_id === projectId), [projects, projectId]);
   const emAndamento = Boolean(execution && !TERMINAL.has(execution.status));
   const podeRetomar = execution?.status === "blocked" || execution?.status === "cancelled" || execution?.status === "failed" || execution?.status === "paused_capacity" || execution?.status === "waiting_capacity";
+
+  function selecionarAtalho(prompt: string) {
+    setTask(prompt);
+    if (!projectId) {
+      setNewProjectName("Meu primeiro projeto");
+      setShowProjectCreation(true);
+      setErro(null);
+    }
+  }
+
+  async function criarPrimeiroProjeto(e: FormEvent) {
+    e.preventDefault();
+    const name = newProjectName.trim();
+    if (!name || name.length > 128 || creatingProject) return;
+    setCreatingProject(true);
+    setErro(null);
+    try {
+      const project = await api.criarCloudProjeto({ name });
+      setProjects((current) => [project, ...current.filter((item) => item.project_id !== project.project_id)]);
+      setProjectId(project.project_id);
+      setShowProjectCreation(false);
+    } catch (error) {
+      setErro(error instanceof ApiError ? mensagemAmigavel(error.message) || "Não foi possível criar o projeto." : "Não foi possível criar o projeto.");
+    } finally {
+      setCreatingProject(false);
+    }
+  }
 
   async function executar(e?: FormEvent) {
     e?.preventDefault();
@@ -479,19 +509,36 @@ export default function MissaoPage() {
         </div>
       </header>
 
-      {!execution ? <EmptyState onSelect={setTask} composer={composer} /> : <><div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-44 sm:px-6"><Conversation task={submittedTask || execution.task.split("\n\n[OLYMPUS_ATTACHMENTS]")[0]} attachments={submittedAttachments} execution={execution} statusText={statusText} elapsed={elapsed} events={events} emAndamento={emAndamento} podeRetomar={podeRetomar} onResume={retomar} onDownload={baixarResultado} onPreview={abrirPreview} onVersions={carregarVersoes} onNew={limpar} /></div><div className="composer-dock fixed inset-x-0 bottom-0 z-30 px-3 pb-4 pt-10 md:left-[252px] sm:px-6"><div className="mx-auto max-w-3xl">{composer}</div></div></>}
+      {!execution ? <EmptyState onSelect={selecionarAtalho} composer={composer}
+        noProject={!projectId} onCreate={() => { setNewProjectName("Meu primeiro projeto"); setShowProjectCreation(true); setErro(null); }}
+        creationForm={showProjectCreation && !projectId ? <form onSubmit={criarPrimeiroProjeto} aria-label="Criar primeiro projeto" className="mx-auto mb-5 w-full max-w-3xl rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.045] p-4 text-left">
+          <label htmlFor="olympus-new-project-name" className="mb-2 block text-sm font-medium text-zinc-200">Nome do seu primeiro projeto</label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input id="olympus-new-project-name" name="project-name" autoComplete="off" value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} maxLength={128} required className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171717] px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-400/50" />
+            <button type="submit" disabled={creatingProject || !newProjectName.trim()} className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black disabled:opacity-50">{creatingProject ? "Criando..." : "Criar projeto"}</button>
+            <button type="button" disabled={creatingProject} onClick={() => setShowProjectCreation(false)} className="rounded-xl px-4 py-3 text-sm text-zinc-400 hover:text-white">Cancelar</button>
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">O nome e os arquivos do projeto serão preservados. A geração por IA continua indisponível enquanto concluímos a homologação.</p>
+        </form> : null}
+      /> : <><div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-44 sm:px-6"><Conversation task={submittedTask || execution.task.split("\n\n[OLYMPUS_ATTACHMENTS]")[0]} attachments={submittedAttachments} execution={execution} statusText={statusText} elapsed={elapsed} events={events} emAndamento={emAndamento} podeRetomar={podeRetomar} onResume={retomar} onDownload={baixarResultado} onPreview={abrirPreview} onVersions={carregarVersoes} onNew={limpar} /></div><div className="composer-dock fixed inset-x-0 bottom-0 z-30 px-3 pb-4 pt-10 md:left-[252px] sm:px-6"><div className="mx-auto max-w-3xl">{composer}</div></div></>}
     </main>
     {workspacePanel && <WorkspaceOverlay projectId={projectId} mode={workspacePanel} preview={preview} versions={versions} comparison={comparison} selectedVersion={selectedVersion} files={studioFiles} selectedFile={selectedFile} fileDraft={fileDraft} runtimeLogs={runtimeLogs} loading={panelLoading} error={panelError} notice={panelNotice} task={task} execution={execution} statusText={statusText} events={events} emAndamento={emAndamento} sending={sending} onTask={setTask} onStart={() => void executar()} onMode={(mode) => mode === "preview" ? void abrirPreview() : mode === "files" ? void carregarArquivos() : mode === "versions" ? void carregarVersoes() : abrirPublicacao()} onClose={() => setWorkspacePanel(null)} onReload={() => void abrirPreview()} onDownload={() => void baixarResultado()} onSaveVersion={() => void salvarVersao()} onCompare={(versionId) => void compararVersao(versionId)} onRestore={(version) => void restaurarVersao(version)} onOpenFile={(path) => void abrirArquivo(path)} onDraft={setFileDraft} onSaveFile={() => void salvarArquivo()} onElement={(element) => { setTask(`Altere o elemento ${element.selector}${element.text ? ` (“${element.text}”)` : ""}: `); if (window.innerWidth < 768) setWorkspacePanel(null); }} />}
   </PainelShell>;
 }
 
-function EmptyState({ onSelect, composer }: { onSelect: (value: string) => void; composer: ReactNode }) {
+function EmptyState({ onSelect, composer, noProject, onCreate, creationForm }: { onSelect: (value: string) => void; composer: ReactNode; noProject: boolean; onCreate: () => void; creationForm: ReactNode }) {
   return <section className="olympus-welcome relative mx-auto flex w-full max-w-4xl flex-1 flex-col items-center overflow-hidden px-4 pb-8 pt-7 text-center sm:px-6 sm:pt-9">
     <div className="olympus-aura" aria-hidden="true" />
     <div className="relative z-10 flex w-full flex-col items-center">
       <div className="olympus-hero-mark"><OlympusMark className="h-11 w-11" /></div>
       <h1 className="mt-4 text-3xl font-semibold tracking-[-0.045em] text-zinc-50 sm:text-[38px] sm:leading-[1.08]">O que vamos construir hoje?</h1>
       <p className="mt-3 flex max-w-xl items-center justify-center gap-2 text-sm leading-6 text-zinc-500"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" />Olympus pronto para planejar, construir e verificar seu projeto.</p>
+      {noProject && <div className="mt-5 w-full max-w-3xl rounded-2xl border border-white/[0.10] bg-white/[0.025] p-4 text-left">
+        <p className="text-sm font-medium text-zinc-100">Comece criando seu primeiro projeto</p>
+        <p className="mt-1 text-xs leading-5 text-zinc-400">Escolha um nome para salvar seu trabalho. Você não precisa abrir o menu lateral.</p>
+        <button type="button" onClick={onCreate} className="mt-3 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black">Criar primeiro projeto</button>
+      </div>}
+      <div className="mt-4 w-full max-w-3xl">{creationForm}</div>
       <div className="welcome-composer mt-6 w-full max-w-3xl text-left">{composer}</div>
       <div className="mt-5 flex w-full max-w-3xl items-center gap-3"><span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-600">Comece com um atalho</span><span className="welcome-divider h-px flex-1" /></div>
       <div className="mt-3 grid w-full max-w-3xl gap-2 sm:grid-cols-2">{SUGESTOES.map((sugestao) => <button key={sugestao.label} type="button" onClick={() => onSelect(sugestao.prompt)} className="olympus-action-card group flex items-center gap-3 rounded-2xl border border-white/[0.075] bg-white/[0.018] px-3.5 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/[0.16] hover:bg-white/[0.04]">
