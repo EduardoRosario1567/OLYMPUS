@@ -29,9 +29,13 @@ jobs:
           import os, secrets
           admin_email = "ci-admin@example.invalid"
           admin_password = secrets.token_urlsafe(36)
+          jwt_secret = secrets.token_hex(48)
+          print("::add-mask::" + admin_password)
+          print("::add-mask::" + jwt_secret)
           with open("backend/.env", "a", encoding="utf-8") as f:
               f.write("\nOLYMPUS_ADMIN_EMAIL=" + admin_email + "\n")
               f.write("OLYMPUS_ADMIN_SENHA=" + admin_password + "\n")
+              f.write("OLYMPUS_JWT_SECRET=" + jwt_secret + "\n")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
               f.write("CI_ADMIN_EMAIL=" + admin_email + "\n")
               f.write("CI_ADMIN_PASSWORD=" + admin_password + "\n")
