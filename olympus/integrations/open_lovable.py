@@ -49,9 +49,14 @@ def _safe_path(raw: str) -> Path:
     p = PurePosixPath(raw)
     if any(piece in ('..', '.', '') for piece in raw.split('/')) or p.suffix.lower() not in _ALLOWED_EXT:
         raise OpenLovableError('Unsafe generated path')
+    if any(piece.startswith('.') for piece in p.parts):
+        raise OpenLovableError('Hidden source paths are not exportable')
+    if not re.fullmatch(r'[A-Za-z0-9_./-]+', raw):
+        raise OpenLovableError('Unexpected generated path characters')
     if p.parts[0] not in ('src', 'public') and raw not in (
-        'index.html', 'package.json', 'vite.config.js',
-        'tailwind.config.js', 'postcss.config.js'
+        'index.html', 'package.json', 'package-lock.json', 'tsconfig.json',
+        'vite.config.js', 'vite.config.ts', 'tailwind.config.js',
+        'tailwind.config.ts', 'postcss.config.js', 'postcss.config.ts',
     ):
         raise OpenLovableError('Generated file outside web project')
     if len(p.parts) > 8:
