@@ -225,7 +225,10 @@ class OpenLovableWebDeveloper:
         build = client.json('/api/run-command-v2', {'command': 'npm run build'})
         output = str(build.get('output') or '')
         if (build.get('success') is not True or build.get('exitCode') != 0
-                or not re.search(r'(?m)^Return code:\s*0\s*
+                or not re.search(r'(?m)^Return code:\s*0\s*$', output)):
+            raise OpenLovableError('React build did not pass inside sandbox')
+        self.telemetry({'event': 'open_lovable_build_passed', 'sandbox': 'e2b'})
+        root = self.workspace
         root.mkdir(parents=True, exist_ok=True)
         for relative, content in files.items():
             target = root / relative
