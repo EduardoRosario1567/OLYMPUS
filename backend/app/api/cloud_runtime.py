@@ -213,6 +213,14 @@ def _view(record):
 
 @router.post("/missions", status_code=202)
 def submit(payload: CloudMissionCreate, identity=Depends(_can_run)):
+    if os.environ.get("OLYMPUS_ENV", "").strip().lower() in {"staging", "production", "prod"}:
+        verified = os.environ.get("OLYMPUS_MISSION_SANDBOX_VERIFIED") == "1"
+        selected = os.environ.get("OLYMPUS_CLOUD_PILOT_TENANT_ID", "").strip()
+        if not verified or not selected or selected != identity.tenant_id:
+            raise HTTPException(
+                status_code=503,
+                detail="Execução de missões na nuvem aguarda homologação de isolamento; projetos e histórico permanecem acessíveis.",
+            )
     # Short conversational controls such as "segue" mean resume the latest
     # meaningful paused mission in this project. They are not new coding tasks.
     if _is_continuation_task(payload.task):
@@ -310,6 +318,14 @@ def cancel(execution_id: str, identity=Depends(_can_run)):
 
 @router.post("/executions/{execution_id}/resume")
 def resume(execution_id: str, identity=Depends(_can_run)):
+    if os.environ.get("OLYMPUS_ENV", "").strip().lower() in {"staging", "production", "prod"}:
+        verified = os.environ.get("OLYMPUS_MISSION_SANDBOX_VERIFIED") == "1"
+        selected = os.environ.get("OLYMPUS_CLOUD_PILOT_TENANT_ID", "").strip()
+        if not verified or not selected or selected != identity.tenant_id:
+            raise HTTPException(
+                status_code=503,
+                detail="Execução de missões na nuvem aguarda homologação de isolamento; projetos e histórico permanecem acessíveis.",
+            )
     record = _RUNTIME.get(execution_id)
     if record is None or record.tenant_id != identity.tenant_id:
         raise HTTPException(status_code=404, detail="execution not found")
