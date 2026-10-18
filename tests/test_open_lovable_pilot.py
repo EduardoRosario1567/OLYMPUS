@@ -9,7 +9,7 @@ from unittest.mock import patch
 from olympus.integrations.open_lovable import (
     OpenLovableClient, OpenLovableError, OpenLovableWebDeveloper,
     _files_from_generated, _safe_path, _validated_base, _verify_export, _SESSION_LOCK,
-    _pilot_process_lock,
+    _pilot_process_lock, pilot_tenant_authorized,
 )
 
 
@@ -83,6 +83,12 @@ class FakeClient:
 
 
 class OpenLovableContractTests(unittest.TestCase):
+    def test_tenant_allowlist_is_fail_closed(self):
+        self.assertFalse(pilot_tenant_authorized(None, None))
+        self.assertFalse(pilot_tenant_authorized('tenant-a', None))
+        self.assertFalse(pilot_tenant_authorized('tenant-b', 'tenant-a'))
+        self.assertTrue(pilot_tenant_authorized('tenant-a', 'tenant-a'))
+
     def test_url_policy(self):
         self.assertEqual(
             _validated_base('http://open-lovable-upstream.railway.internal:8080'),
