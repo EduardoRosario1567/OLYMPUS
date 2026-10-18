@@ -39,13 +39,29 @@ jobs:
             olympus-beta-backend:ci
           docker run -d --name olympus-ci-frontend --network olympus-beta-ci \
             -p 127.0.0.1:18080:3000 olympus-beta-frontend:ci
-          for i in $(seq 1 100); do
-            if curl -fsS http://127.0.0.1:18080/login -o /dev/null && \
-               curl -fsS http://127.0.0.1:18080/api/olympus/health -o /tmp/olympus-health.json; then
-              break
+          READY=0
+          for i in $(seq 1 35); do
+            FRONT=$(curl --max-time 4 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/login || true)
+            PROXY=$(curl --max-time 4 -sS -o /tmp/olympus-health.json -w '%{http_code}' http://127.0.0.1:18080/api/olympus/health || true)
+            if [ "$FRONT" = 200 ] && [ "$PROXY" = 200 ]; then READY=1; break; fi
+            if [ "$i" -eq 1 ] || [ "$i" -eq 10 ] || [ "$i" -eq 25 ]; then
+              echo "SMOKE_WAIT frontend=$FRONT backend_via_proxy=$PROXY"
             fi
             sleep 2
           done
+          if [ "$READY" != 1 ]; then
+            echo "SMOKE_FAILED frontend=$FRONT proxy=$PROXY"
+            echo "Backend process state:"
+            docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' olympus-ci-backend || true
+            echo "Frontend process state:"
+            docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' olympus-ci-frontend || true
+            echo "Direct internal backend fetch:"
+            docker exec olympus-ci-frontend node -e "fetch('http://olympus-cloud-backend.railway.internal:8000/health').then(r=>console.log('backend_internal_http',r.status)).catch(e=>console.log('backend_internal_failure',e.name,e.message))" || true
+            echo "Last backend and frontend logs:"
+            docker logs olympus-ci-backend 2>&1 | tail -n 60 || true
+            docker logs olympus-ci-frontend 2>&1 | tail -n 60 || true
+            exit 1
+          fi
           python3 - <<'PY'
           import json, urllib.request, urllib.error
           with open('/tmp/olympus-health.json', encoding='utf-8') as f:
