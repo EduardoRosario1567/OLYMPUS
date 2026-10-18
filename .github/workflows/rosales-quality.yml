@@ -1,0 +1,25 @@
+name: Rosales Cafe generated artifact quality (read-only)
+on:
+  push:
+    branches: [artifact/rosales-cafe-pilot-20261018]
+    paths:
+      - entregas/rosales-cafe-real-pilot/**
+      - scripts/qa_rosales_generated.py
+      - .github/workflows/rosales-quality.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-content-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect broken links and unsupported business claims
+        run: python3 scripts/qa_rosales_generated.py
+      - name: Preserve quality findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosales-cafe-quality-report
+          path: entregas/rosales-cafe-real-pilot/quality-report.json
+          if-no-files-found: error
