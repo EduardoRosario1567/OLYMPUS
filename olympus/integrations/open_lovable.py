@@ -167,6 +167,10 @@ class OpenLovableWebDeveloper:
             return self.default_runner.run(task, max_iterations=max_iterations, resume=resume)
         # Only controlled single-writer pilot. No fallback after a remote
         # sandbox mutation, which would produce inconsistent deliverables.
+        # Upstream uses global sandbox/conversation state, therefore production
+        # MUST stay disabled regardless of feature flags until session isolation.
+        if os.environ.get('OLYMPUS_ENV', 'development').lower() in ('production', 'prod'):
+            return self._blocked(task, 'Open Lovable upstream is not tenant-isolated: production disabled')
         if os.getenv('OLYMPUS_OPEN_LOVABLE_EXCLUSIVE') != '1':
             return self._blocked(task, 'Dedicated single-replica Open Lovable required (pilot only)')
         if not _SESSION_LOCK.acquire(blocking=False):
@@ -210,6 +214,78 @@ class OpenLovableWebDeveloper:
             results.get('filesCreated') or results.get('filesUpdated')
         ):
             raise OpenLovableError('Remote sandbox did not apply files')
+        expected_files = {str(p) for p in files}
+        actual_files = {str(p) for p in (
+            list(results.get('filesCreated') or ()) + list(results.get('filesUpdated') or ())
+        )}
+        if not expected_files.issubset(actual_files):
+            raise OpenLovableError('Sandbox reported incomplete file application')
+        # The upstream E2B provider may report exitCode=0 even when npm exits
+        # nonzero; require the explicit subprocess Return code marker as well.
+        build = client.json('/api/run-command-v2', {'command': 'npm run build'})
+        output = str(build.get('output') or '')
+        if (build.get('success') is not True or build.get('exitCode') != 0
+                or not re.search(r'(?m)^Return code:\s*0\s*
+        root.mkdir(parents=True, exist_ok=True)
+        for relative, content in files.items():
+            target = root / relative
+            if not target.resolve().is_relative_to(root):
+                raise OpenLovableError('Output escaped execution workspace')
+            if any(parent.is_symlink() for parent in (target, *target.parents)
+                   if parent != root and parent.is_relative_to(root)):
+                raise OpenLovableError('Refusing generated symlink target')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding='utf-8')
+        main_file = 'src/main.tsx' if (root / 'src/main.tsx').exists() else 'src/main.jsx'
+        if not (root / 'index.html').exists():
+            (root / 'index.html').write_text(
+                '<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"/>'
+                '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
+                '</head><body><div id="root"></div>'
+                '<script type="module" src="/' + main_file + '"></script></body></html>\n',
+                encoding='utf-8'
+            )
+        if not (root / 'src/main.jsx').exists() and not (root / 'src/main.tsx').exists():
+            (root / 'src').mkdir(exist_ok=True)
+            (root / 'src/main.jsx').write_text(
+                "import React from 'react';\nimport { createRoot } from 'react-dom/client';\n"
+                "import App from './App." + ("tsx" if (root / 'src/App.tsx').exists() else "jsx") + "';\n"
+                "createRoot(document.getElementById('root')).render(<App />);\n",
+                encoding='utf-8'
+            )
+        if not (root / 'package.json').exists():
+            (root / 'package.json').write_text(json.dumps({
+                'name': 'olympus-lovable-delivery', 'version': '0.1.0', 'private': True,
+                'type': 'module', 'scripts': {'dev': 'vite --host 0.0.0.0', 'build': 'vite build'},
+                'dependencies': {'react': '^19.0.0', 'react-dom': '^19.0.0'},
+                'devDependencies': {'vite': '^6.0.0'},
+            }, indent=2) + '\n', encoding='utf-8')
+        output = list(files)
+        for name in ('index.html', 'package.json', 'src/main.jsx'):
+            if Path(name) not in output and (root / name).exists():
+                output.append(Path(name))
+        concept = root / 'docs/delivery-concept.md'
+        concept.parent.mkdir(parents=True, exist_ok=True)
+        if not concept.exists():
+            concept.write_text(
+                '# OLYMPUS — Web delivery concept\n\n'
+                '## Visual thesis\nAI-generated React interface; browser/visual review pending.\n\n'
+                '## Content plan\nOriginal user request is the source; no external facts verified.\n\n'
+                '## Interaction plan\nResponsive React application; interactions require browser verification.\n\n'
+                '## Evidence\nOpen Lovable protocol completed; independent OLYMPUS checks pending. '
+                'No visual test evidence; image source/license checks pending.\n',
+                encoding='utf-8'
+            )
+            output.append(Path('docs/delivery-concept.md'))
+        self.telemetry({'event': 'open_lovable_files_ready', 'count': len(output)})
+        return DeveloperReport(
+            task, 'completed', True, (client.model,), (), tuple(str(p) for p in output),
+            ('sandbox_react_build',), 1,
+            delivery_review={'engine': 'open_lovable', 'build': 'passed_remote', 'browser': 'pending'}
+        )
+, output)):
+            raise OpenLovableError('React build did not pass inside sandbox')
+        self.telemetry({'event': 'open_lovable_build_passed', 'sandbox': 'e2b'})
         root = self.workspace
         root.mkdir(parents=True, exist_ok=True)
         for relative, content in files.items():
