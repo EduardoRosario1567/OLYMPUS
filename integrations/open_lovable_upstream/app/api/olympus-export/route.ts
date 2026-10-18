@@ -30,7 +30,7 @@ function authenticate(request: NextRequest): boolean {
 function validPath(path: string): boolean {
   return path.length < 220 && !path.startsWith('/') &&
     !path.includes('\\') && !path.includes(':') &&
-    !path.includes('//') && !path.split('/').some(s => !s || s === '.' || s === '..') &&
+    !path.includes('//') && !path.split('/').some(s => !s || s.startsWith('.')) &&
     ALLOWED.test(path);
 }
 
