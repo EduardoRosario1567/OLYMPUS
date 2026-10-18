@@ -10,6 +10,8 @@ RUN git init -q && \
     test "$(git rev-parse HEAD)" = "806b8072f28afea11fa2b028cac1449eff74c511" && \
     rm -rf .git
 COPY integrations/open_lovable_upstream/app/api/olympus-export/route.ts /app/app/api/olympus-export/route.ts
+COPY integrations/open_lovable_upstream/apply-groq-routing.cjs /tmp/apply-groq-routing.cjs
+RUN node /tmp/apply-groq-routing.cjs
 RUN npm ci --no-audit --no-fund
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
