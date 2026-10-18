@@ -7,10 +7,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import fcntl
+import stat
 import os
 import re
 import threading
 from pathlib import Path, PurePosixPath
+from contextlib import contextmanager
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -86,6 +89,35 @@ def _files_from_generated(text: str) -> dict[Path, str]:
     ) for path in files):
         raise OpenLovableError('No application entrypoint generated')
     return files
+
+
+@contextmanager
+def _pilot_process_lock():
+    """Fail-closed same-host advisory lease; NOT a distributed tenant lock."""
+    base = Path(os.getenv('OLYMPUS_OPEN_LOVABLE_LOCK_DIR') or
+                (Path(os.getenv('OLYMPUS_CLOUD_DATA_DIR', '.olympus/cloud')) /
+                 'locks')).resolve()
+    base.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = base.stat()
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise OpenLovableError('Pilot lock directory is not private')
+    lock_path = base / 'open-lovable.lock'
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
+    descriptor = os.open(lock_path, flags, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+            raise OpenLovableError('Pilot lock file is not private')
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise OpenLovableError('Open Lovable pilot held by another local worker') from None
+        try:
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
 
 
 class OpenLovableClient:
@@ -237,7 +269,10 @@ class OpenLovableWebDeveloper:
         if not _SESSION_LOCK.acquire(blocking=False):
             return self._blocked(task, 'Open Lovable pilot busy; retry later')
         try:
-            return self._run_web(task)
+            # Filesystem advisory lease protects multiple workers on ONE host,
+            # never across isolated Railway replicas.
+            with _pilot_process_lock():
+                return self._run_web(task)
         except (OpenLovableError, OSError, ValueError) as exc:
             return self._blocked(task, str(exc))
         finally:
