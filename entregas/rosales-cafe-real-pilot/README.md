@@ -13,3 +13,12 @@ Gerado no piloto controlado em Railway pelo modelo Groq `openai/gpt-oss-20b` e e
 - Não há URL pública estável de preview; não inventar.
 
 Não confundir este artefato com homologação de produção.
+
+## Revisão automática de conteúdo — BLOQUEADA
+A verificação determinística identificou quatro achados no código-fonte exportado, sem modificá-lo:
+- `#contact` é referenciado na navegação e na chamada para ação, mas não existe elemento com esse ID.
+- `Fundado por apaixonados por café` é uma história de fundação não confirmada.
+- A alegação de sustentabilidade não dispõe de evidência fornecida.
+- A alegação sobre seleção dos grãos não foi confirmada.
+
+Relatório auditável: [workflow de qualidade](https://github.com/EduardoRosario1567/OLYMPUS/actions/workflows/rosales-quality.yml). A reprovação é intencional; não significa que o build E2B falhou. **Não publicar sem corrigir e testar novamente.**
