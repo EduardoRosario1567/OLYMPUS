@@ -79,9 +79,15 @@ export async function POST(request: NextRequest) {
       if (!lines.some((x: string) => x === 'Return code: 0') ||
           !absolute.startsWith('/home/user/app/') ||
           !absolute.endsWith('/' + name)) return deny(422, 'unsafe_or_linked_file');
-      const content = await provider.readFile(name);
-      if (typeof content !== 'string') return deny(422, 'non_text_export');
-      const data = Buffer.from(content, 'utf8');
+      // The original E2B readFile uses print(content), adding a newline.
+      // Base64 stdout preserves actual source bytes from the compiled sandbox.
+      const encoded = await provider.runCommand('base64 ' + name);
+      const transcript = String(encoded.stdout || '');
+      const match = transcript.match(/STDOUT:\s*([A-Za-z0-9+/=\s]+?)\s*Return code:\s*0\s*$/);
+      if (!match) return deny(422, 'file_read_failed');
+      const data = Buffer.from(match[1].replace(/\s/g, ''), 'base64');
+      const content = data.toString('utf8');
+      if (!Buffer.from(content, 'utf8').equals(data)) return deny(422, 'non_utf8_asset');
       if (data.length > MAX_ONE || (total += data.length) > MAX_TOTAL)
         return deny(413, 'export_size_limit');
       files.push({ path: name, content, sha256: sha256(data) });
