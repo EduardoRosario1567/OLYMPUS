@@ -102,7 +102,7 @@ def _runner_factory(workspace: str, telemetry):
         mission_timeout,
         policy_override=policy,
     )
-    return AutonomousDeveloper(
+    developer = AutonomousDeveloper(
         root=workspace,
         router=router_adapter,
         selector=selector,
@@ -116,6 +116,11 @@ def _runner_factory(workspace: str, telemetry):
             ),
         )),
     )
+    # Pilot engine: explicit opt-in, preserving default OLYMPUS routing and SaaS auth.
+    if os.environ.get("OLYMPUS_OPEN_LOVABLE_ENABLED", "0") == "1":
+        from olympus.integrations.open_lovable import OpenLovableWebDeveloper
+        return OpenLovableWebDeveloper(workspace, developer, telemetry=telemetry)
+    return developer
 
 
 _RUNTIME = CloudRuntime(
