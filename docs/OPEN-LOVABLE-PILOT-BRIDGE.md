@@ -13,6 +13,7 @@ Esse endpoint usa um segredo dedicado e exporta somente fontes UTF-8 seguras, co
 ## Flags, sempre DESLIGADAS até homologação
 - \`OLYMPUS_OPEN_LOVABLE_ENABLED=1\` liga o adapter somente em ambiente não-produtivo.
 - \`OLYMPUS_OPEN_LOVABLE_EXCLUSIVE=1\` habilita execução única local, mas não isola pods, usuários nem processos remotos.
+- \`OLYMPUS_OPEN_LOVABLE_PILOT_TENANT_ID\`: identificador da organização explicitamente autorizada; sem ele, ou se o tenant divergir, missões continuam no motor original sem usar o sandbox compartilhado.
 - \`OLYMPUS_OPEN_LOVABLE_URL\`: host privado \`http://*.railway.internal\`, se ambos os serviços estiverem na mesma rede; ou proxy HTTPS protegido por Basic.
 - \`OLYMPUS_OPEN_LOVABLE_USER\` / \`OLYMPUS_OPEN_LOVABLE_PASSWORD\` para o proxy HTTPS.
 - \`OLYMPUS_OPEN_LOVABLE_EXPORT_TOKEN\`: segredo do adapter; corresponde a \`OLYMPUS_BRIDGE_EXPORT_TOKEN\` no fork upstream.
@@ -28,7 +29,7 @@ Esse endpoint usa um segredo dedicado e exporta somente fontes UTF-8 seguras, co
 5. **Deploy:** staging privado, depois rollout com rollback. O Railway atual hospeda Open Lovable e proxy; não é um backend OLYMPUS completo.
 
 ## Evidências disponíveis
-- 10 testes offline de contrato, incluindo exportação ausente, adulterada, caminhos inseguros, troca de sandbox, ausência de token, concorrência e bloqueio em produção.
+- 11 testes offline de contrato, incluindo exportação ausente, adulterada, caminhos inseguros, troca de sandbox, ausência de token, concorrência e bloqueio em produção.
 - CI normal valida backend, frontend, npm audit, interface Playwright e fallback. A nova exportação é um contrato simulado, **não um teste com upstream real**.
 - Tudo fica em branch de trabalho, com PR em rascunho; nenhuma alteração em \`main\` ou deploy automático.
 
