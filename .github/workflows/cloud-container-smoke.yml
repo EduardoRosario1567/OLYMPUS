@@ -3,6 +3,7 @@ on:
   push:
     branches: [feature/olympus-cloud-private-beta]
     paths:
+      - .dockerignore
       - frontend/**
       - backend/**
       - olympus/**
