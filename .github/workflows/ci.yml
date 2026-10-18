@@ -22,10 +22,21 @@ jobs:
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
 
-      - name: Preparar .env
+      - name: Preparar configuração efêmera da CI
         run: |
           cp backend/.env.example backend/.env
-          sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+          python3 - <<'PY'
+          import os, secrets
+          admin_email = "ci-admin@example.invalid"
+          admin_password = secrets.token_urlsafe(36)
+          with open("backend/.env", "a", encoding="utf-8") as f:
+              f.write("\nOLYMPUS_ADMIN_EMAIL=" + admin_email + "\n")
+              f.write("OLYMPUS_ADMIN_SENHA=" + admin_password + "\n")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("CI_ADMIN_EMAIL=" + admin_email + "\n")
+              f.write("CI_ADMIN_PASSWORD=" + admin_password + "\n")
+          print("Ephemeral admin credentials generated; no secret output.")
+          PY
 
       - name: Instalar dependências e navegador real
         working-directory: frontend
@@ -94,15 +105,25 @@ jobs:
           echo "$SAIDA"
           echo "$SAIDA" | grep -q "Nada a fazer" || (echo "seed não foi idempotente" && exit 1)
 
-      - name: Login (autenticação real via HTTP)
+      - name: Login (autenticação HTTP real com credenciais efêmeras)
         run: |
-          RESP=$(curl -sf -X POST http://localhost:8000/auth/login \
-            -H "Content-Type: application/json" \
-            -d '{"email":"admin@olympus.local","senha":"ci-test-password"}')
-          echo "$RESP" | python3 -c "import sys,json; json.load(sys.stdin)['access_token']" \
-            || (echo "login não retornou access_token" && exit 1)
-          TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+          payload = json.dumps({
+              "email": os.environ["CI_ADMIN_EMAIL"],
+              "senha": os.environ["CI_ADMIN_PASSWORD"],
+          }).encode("utf-8")
+          req = Request("http://127.0.0.1:8000/auth/login",
+                        data=payload, headers={"Content-Type": "application/json"})
+          with urlopen(req, timeout=10) as response:
+              data = json.load(response)
+          token = data.get("access_token")
+          assert isinstance(token, str) and token
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as file:
+              file.write("TOKEN=" + token + "\n")
+          print("HTTP login returned access token; token not displayed.")
+          PY
 
       - name: Chamar endpoints protegidos com o token real
         run: |
