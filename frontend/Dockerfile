@@ -9,6 +9,7 @@ ARG OLYMPUS_BACKEND_INTERNAL_URL=http://olympus-cloud-backend.railway.internal:8
 ENV NEXT_PUBLIC_API_BASE_URL=/api/olympus
 ENV OLYMPUS_BACKEND_INTERNAL_URL=http://olympus-cloud-backend.railway.internal:8000
 ENV OLYMPUS_FRONTEND_CLOUD_PROXY=1
+ENV NEXT_PUBLIC_OLYMPUS_CLOUD_BETA=1
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

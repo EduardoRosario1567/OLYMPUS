@@ -10,6 +10,8 @@ import { sanitizeDiagnostic } from "@/lib/diagnostic-share";
 import { DiagnosticActions } from "@/components/technical-share-tools";
 import { useSearchParams } from "next/navigation";
 
+const CLOUD_BETA = process.env.NEXT_PUBLIC_OLYMPUS_CLOUD_BETA === "1";
+
 const TERMINAL = new Set(["completed", "failed", "blocked", "cancelled", "paused_capacity", "waiting_capacity"]);
 const LABELS: Record<string, string> = {
   queued: "Preparando sua missão",
@@ -478,6 +480,7 @@ export default function MissaoPage() {
 
   const composer = <>
     {erro && <div className="mb-2 flex items-start justify-between gap-3 rounded-xl bg-[#2a1719] px-4 py-3 text-sm text-rose-200"><span>{erro}</span><button type="button" onClick={() => setErro(null)} aria-label="Fechar aviso" className="text-rose-300/60 hover:text-rose-100">×</button></div>}
+    {CLOUD_BETA && <p role="status" className="mb-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 text-xs leading-5 text-amber-100/85">Você pode criar, abrir e salvar projetos neste piloto. O envio de pedidos à IA está temporariamente bloqueado até a homologação de isolamento.</p>}
     <form onSubmit={executar} onDragEnter={(e) => { e.preventDefault(); if (!emAndamento) setDragging(true); }} onDragOver={(e) => e.preventDefault()} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }} onDrop={(e) => { e.preventDefault(); setDragging(false); if (!emAndamento) void enviarArquivos(Array.from(e.dataTransfer.files)); }} className={`composer-shell rounded-[26px] border p-2.5 shadow-2xl ${dragging ? "border-cyan-300/50" : "border-white/[0.1]"}`}>
       <input ref={fileInput} type="file" multiple accept={ACCEPTED_FILES} className="hidden" onChange={(e) => void enviarArquivos(Array.from(e.target.files ?? []))} />
       {(attachments.length > 0 || uploading) && <div className="flex flex-wrap gap-2 px-2 pb-1 pt-1">{attachments.map((attachment) => <AttachmentChip key={attachment.attachment_id} attachment={attachment} removable={!emAndamento} onRemove={() => void removerArquivo(attachment)} />)}{uploading && <span className="flex items-center gap-2 rounded-xl bg-white/[0.055] px-3 py-2 text-xs text-zinc-400"><span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />Enviando...</span>}</div>}
@@ -489,7 +492,7 @@ export default function MissaoPage() {
         </div>
         <div className="flex items-center gap-2">
           {!emAndamento && <label className="composer-paid flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] text-zinc-500"><input type="checkbox" checked={paidFallback} onChange={(event) => setPaidFallback(event.target.checked)} className="h-3.5 w-3.5 accent-cyan-500" /><span className="hidden md:inline">IA paga se necessário</span>{paidFallback && <><span className="hidden lg:inline">· teto US$</span><input aria-label="Limite de gasto da missão" type="number" min={0.1} max={1000} step={0.1} value={paidSpendCap} onChange={(event) => setPaidSpendCap(Math.max(0.1, Number(event.target.value) || 0.1))} className="w-14 rounded-md border border-white/[0.08] bg-transparent px-1.5 py-1 text-zinc-300 outline-none" /></>}</label>}
-          <button type="submit" disabled={sending || uploading || emAndamento || !projectId || !task.trim()} aria-label="Enviar pedido" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-black transition hover:scale-[1.03] hover:bg-zinc-200 disabled:scale-100 disabled:bg-zinc-700 disabled:text-zinc-500"><Icon className="h-[18px] w-[18px]"><path d="M12 19V5M6 11l6-6 6 6" /></Icon></button>
+          <button type="submit" disabled={CLOUD_BETA || sending || uploading || emAndamento || !projectId || !task.trim()} aria-label="Enviar pedido" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-black transition hover:scale-[1.03] hover:bg-zinc-200 disabled:scale-100 disabled:bg-zinc-700 disabled:text-zinc-500"><Icon className="h-[18px] w-[18px]"><path d="M12 19V5M6 11l6-6 6 6" /></Icon></button>
         </div>
       </div>
     </form>
@@ -532,7 +535,7 @@ function EmptyState({ onSelect, composer, noProject, onCreate, creationForm }: {
     <div className="relative z-10 flex w-full flex-col items-center">
       <div className="olympus-hero-mark"><OlympusMark className="h-11 w-11" /></div>
       <h1 className="mt-4 text-3xl font-semibold tracking-[-0.045em] text-zinc-50 sm:text-[38px] sm:leading-[1.08]">O que vamos construir hoje?</h1>
-      <p className="mt-3 flex max-w-xl items-center justify-center gap-2 text-sm leading-6 text-zinc-500"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" />Olympus pronto para planejar, construir e verificar seu projeto.</p>
+      <p className="mt-3 flex max-w-xl items-center justify-center gap-2 text-sm leading-6 text-zinc-500"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" />{CLOUD_BETA ? "Beta privada: crie e salve projetos. A geração por IA aguarda homologação de segurança." : "Olympus pronto para planejar, construir e verificar seu projeto."}</p>
       {noProject && <div className="mt-5 w-full max-w-3xl rounded-2xl border border-white/[0.10] bg-white/[0.025] p-4 text-left">
         <p className="text-sm font-medium text-zinc-100">Comece criando seu primeiro projeto</p>
         <p className="mt-1 text-xs leading-5 text-zinc-400">Escolha um nome para salvar seu trabalho. Você não precisa abrir o menu lateral.</p>
