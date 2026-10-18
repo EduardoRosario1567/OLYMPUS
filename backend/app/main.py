@@ -29,7 +29,7 @@ origens = [item.strip() for item in os.environ.get(
     "OLYMPUS_CORS_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 ).split(",") if item.strip()]
-if os.environ.get("OLYMPUS_ENV", "development").lower() in {"production", "prod"} and "*" in origens:
+if os.environ.get("OLYMPUS_ENV", "development").lower() in {"production", "prod", "staging"} and "*" in origens:
     raise RuntimeError("CORS curinga não é permitido em produção.")
 app.add_middleware(
     CORSMiddleware,
