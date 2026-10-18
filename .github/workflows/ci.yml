@@ -60,6 +60,8 @@ jobs:
       - name: Subir backend em background
         run: |
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/backend"
+          # Legacy endpoints are tested ONLY in this ephemeral CI environment.
+          export OLYMPUS_ENABLE_LEGACY_API=1
           cd backend
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
