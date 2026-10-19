@@ -128,6 +128,10 @@ def validate_static_files(html: str, css: str) -> dict[str,str]:
                     r"javascript\s*:",r"data\s*:",r"@font-face\b",r"(?<!-)behavior\s*:"):
         if re.search(pattern,css,re.I):
             raise RosalesAIError("CSS requires external or unsafe resources")
+    # CSS escape sequences can conceal resource-fetching functions or at-rules.
+    # This deliberately narrow pilot accepts only regular @media at-rules.
+    if "\\\\" in css or any(name.lower() != "media" for name in re.findall(r"@([A-Za-z-]+)", css)):
+        raise RosalesAIError("CSS uses unsupported escape or at-rule")
     parser=_SafeMarkup()
     try:
         parser.feed(html)
