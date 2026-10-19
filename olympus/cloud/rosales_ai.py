@@ -151,7 +151,7 @@ def validate_static_files(html: str, css: str) -> dict[str,str]:
     # This deliberately narrow pilot accepts only regular @media at-rules.
     if "\\" in css or any(name.lower() not in {"media", "charset"} for name in re.findall(r"@([A-Za-z-]+)", css)):
         raise RosalesAIError("CSS uses unsupported escape or at-rule")
-    if re.search(r"@charset\\b", css, re.I) and (css.count("@charset") != 1 or not css.lstrip().startswith('@charset "UTF-8";')):
+    if re.search(r"@charset\b", css, re.I) and (css.count("@charset") != 1 or not css.lstrip().startswith('@charset "UTF-8";')):
         raise RosalesAIError("Unsupported CSS charset")
     parser=_SafeMarkup()
     try:
@@ -167,7 +167,7 @@ def validate_static_files(html: str, css: str) -> dict[str,str]:
     if not _visible_copy(html).issubset(approved_copy):
         raise RosalesAIError("Generated brand copy is not approved")
     # CSS-generated visible copy could bypass the HTML text gate.
-    for css_content in re.findall(r"(?<![\\w-])content\\s*:\\s*([^;}]+)", css, flags=re.I):
+    for css_content in re.findall(r"(?<![\w-])content\s*:\s*([^;}]+)", css, flags=re.I):
         if css_content.strip() not in ("''", '\"\"'):
             raise RosalesAIError("Unapproved CSS-generated copy")
     if not re.search(r"Rosales\s+Caf[eé]",html,re.I) or "Col[oô]mb" not in html and "colomb" not in html.lower():
