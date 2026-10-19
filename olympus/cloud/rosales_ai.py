@@ -7,6 +7,10 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 from pathlib import Path
+from contextlib import contextmanager
+import fcntl
+import stat
+import tempfile
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from hashlib import sha256
@@ -184,6 +188,56 @@ def generate_rosales_static(api_key: str, model: str, *, opener=None) -> tuple[s
         raise
     except (HTTPError,URLError,TimeoutError,OSError,ValueError,TypeError,KeyError,IndexError):
         raise RosalesAIError("Provider response unavailable or invalid") from None
+
+
+@contextmanager
+def pilot_generation_guard(data_dir: Path, tenant_id: str, project_id: str):
+    """One writer per persistent project, bounded provider attempts across restarts."""
+    base=(Path(data_dir)/"rosales-ai-attempts").resolve()
+    base.mkdir(mode=0o700,parents=True,exist_ok=True)
+    if base.stat().st_uid!=os.getuid() or stat.S_IMODE(base.stat().st_mode)&0o077:
+        raise RosalesAIError("Attempt log is not private")
+    key=sha256((tenant_id+"\0"+project_id).encode()).hexdigest()
+    lockfile=base/(key+".lock")
+    fd=os.open(lockfile,os.O_CREAT|os.O_RDWR|getattr(os,"O_NOFOLLOW",0),0o600)
+    try:
+        fs=os.fstat(fd)
+        if fs.st_uid!=os.getuid() or stat.S_IMODE(fs.st_mode)&0o077:
+            raise RosalesAIError("Attempt lock is not private")
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RosalesAIError("An AI generation is already underway") from None
+        try:
+            log=base/(key+".json")
+            now=time.time()
+            events=[]
+            if log.is_file():
+                try:
+                    events=json.loads(log.read_text(encoding="utf-8"))
+                    if not isinstance(events,list) or any(not isinstance(x,(int,float)) for x in events):
+                        raise ValueError("not a list")
+                except (ValueError,OSError):
+                    raise RosalesAIError("Attempt record damaged: fail closed") from None
+            events=[float(x) for x in events if now-86400<float(x)<=now]
+            if len(events)>=3 or (events and now-events[-1]<120):
+                raise RosalesAIError("Pilot generation rate limited")
+            # Record BEFORE contacting provider so errors/restarts still consume an attempt.
+            events.append(now)
+            tmpfd,tmpname=tempfile.mkstemp(dir=str(base),prefix=".rosales-attempt-",text=True)
+            try:
+                with os.fdopen(tmpfd,"w",encoding="utf-8") as out:
+                    json.dump(events,out)
+                    out.flush();os.fsync(out.fileno())
+                os.chmod(tmpname,0o600)
+                os.replace(tmpname,log)
+            finally:
+                if os.path.exists(tmpname): os.unlink(tmpname)
+            yield
+        finally:
+            fcntl.flock(fd,fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 def save_generated_files(root: Path, html: str, css: str) -> dict[str,str]:
