@@ -1,0 +1,22 @@
+name: Rosales AI Static Safety
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - olympus/cloud/rosales_ai.py
+      - tests/test_rosales_ai_pilot.py
+      - .github/workflows/rosales-ai-tests.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Rosales AI validation and persistence
+        run: python -m unittest discover -s tests -p test_rosales_ai_pilot.py -v
