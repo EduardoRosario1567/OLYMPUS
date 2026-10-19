@@ -22,3 +22,13 @@ A saída validada pela função foi efêmera e **não foi** salva como projeto n
 2. Guardar os bytes exatos do HTML/CSS produzido e executar o validador estrito, preview e Playwright independente em desktop e iPhone.
 3. Revisar falhas, custos e uso dos modelos. Manter isolamento por organização e limites de tentativas.
 4. Somente depois liberar uma missão-piloto administrativa, permanecendo o motor genérico bloqueado enquanto o upstream Open Lovable não tiver isolamento.
+
+
+## Prova com arquivo real e Chromium independente
+- Nova geração `openai/gpt-oss-120b` no Railway isolado: HTTP 200, **2.784 bytes HTML**, **2.330 bytes CSS**, nove links internos. Uso: **384 tokens de entrada / 1.706 de saída**.
+- SHA256 exato: `index.html = 6d18a1a53551b3975aa6ab0b6e53d03eb8169983d18e01da730f3bcbc2240e1a`; `style.css = fc8bbd369e87f31891f963d5a87c8511c5332754347ee9290d032122ea0dae80`.
+- Os arquivos foram recuperados da saída GZIP/Base64 do serviço Railway e submetidos ao Chromium com o conteúdo carregado em contexto local isolado, sem rede externa. O navegador deste ambiente bloqueou os esquemas `file://` e `127.0.0.1`; por isso a avaliação usou `set_content` com **os mesmos bytes de HTML/CSS**, injetando o CSS no documento de teste. Isso **não prova** hospedagem/HTTP dos arquivos originais.
+- Resultado do navegador para **390 × 844 (iPhone)** e **1440 × 900 (desktop)**: navegação para `#conceito` OK, CSS renderizado, sem transbordamento horizontal, sem erros de página, sem recursos remotos.
+- **REPROVADO em conteúdo comercial:** saída inventou produtores sustentáveis, notas de degustação de chocolate/frutas vermelhas, cardápio, baristas treinados, Wi-Fi e um estabelecimento físico não confirmados. Não publicar nem promover este HTML como site final.
+- Implementado gate conservador no validador Python: todo fragmento visível da página gerada deve pertencer à cópia previamente aprovada em `olympus/cloud/project_templates.py`. Bloqueia texto novo não fundamentado, além de conteúdo textual injetado via CSS, mantendo liberdade de layout HTML/CSS. A integração continua **desativada** em Railway.
+- A versão original aprovada do site estático do usuário foi preservada. Nenhum arquivo de projeto pessoal foi sobrescrito.
