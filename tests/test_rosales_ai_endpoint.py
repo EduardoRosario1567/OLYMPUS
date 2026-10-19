@@ -63,7 +63,7 @@ class TestRosalesAIApi(unittest.TestCase):
             provider.assert_not_called()
 
     def test_generated_files_backup_and_second_attempt_blocked(self):
-        html=INDEX_HTML.replace("aprecia o momento.","transforma o momento.")
+        html=INDEX_HTML.replace('class="hero"', 'class="hero hero-ai"')
         css=STYLE_CSS+"\n/* static-output-test */"
         with patch.object(cloud_projects,"generate_rosales_static",return_value=(html,css)) as provider, \
              patch.object(cloud_projects.PLATFORM,"record_action"):
@@ -76,7 +76,7 @@ class TestRosalesAIApi(unittest.TestCase):
             self.fail_with(409)
             provider.assert_called_once()
         root=self.manager.project_root(self.project.project_id,tenant_id="tenant-admin")
-        self.assertIn("transforma o momento.",(root/"index.html").read_text("utf-8"))
+        self.assertIn("hero-ai",(root/"index.html").read_text("utf-8"))
         self.assertIn("static-output-test",(root/"style.css").read_text("utf-8"))
 
     def test_provider_error_does_not_change_page(self):
