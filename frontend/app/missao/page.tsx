@@ -561,7 +561,7 @@ function EmptyState({ onSelect, composer, noProject, onCreate, onRosales, creati
         <p className="mt-1 text-xs leading-5 text-zinc-400">Escolha um nome para salvar seu trabalho. Você não precisa abrir o menu lateral.</p>
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={onCreate} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black">Criar primeiro projeto</button>
         {CLOUD_BETA && <button type="button" onClick={onRosales} disabled={creatingExample} className="rounded-xl border border-emerald-300/30 px-4 py-2.5 text-sm font-semibold text-emerald-100 disabled:opacity-50">{creatingExample ? "Preparando exemplo..." : "Experimentar Rosales Café"}</button>}</div>
-        {CLOUD_BETA && <p className="mt-2 text-xs text-zinc-500">O exemplo é uma página estática validada; não é uma geração por IA.</p>
+        {CLOUD_BETA && <p className="mt-2 text-xs text-zinc-500">O exemplo é uma página estática validada; não é uma geração por IA.</p>}
       </div>}
       <div className="mt-4 w-full max-w-3xl">{creationForm}</div>
       <div className="welcome-composer mt-6 w-full max-w-3xl text-left">{composer}</div>
