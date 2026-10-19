@@ -270,6 +270,25 @@ export default function MissaoPage() {
     }
   }
 
+  async function criarExemploRosales() {
+    if (creatingProject) return;
+    setCreatingProject(true);
+    setErro(null);
+    try {
+      const name = "Rosales Café — MVP de validação";
+      const existing = projects.find((item) => item.name === name);
+      const project = existing ?? await api.criarCloudProjeto({ name, template: "rosales_cafe_mvp" });
+      setProjects((current) => [project, ...current.filter((item) => item.project_id !== project.project_id)]);
+      setProjectId(project.project_id);
+      setShowProjectCreation(false);
+      setTask("");
+    } catch (error) {
+      setErro(error instanceof ApiError ? mensagemAmigavel(error.message) || "Não foi possível criar o exemplo Rosales Café." : "Não foi possível criar o exemplo Rosales Café.");
+    } finally {
+      setCreatingProject(false);
+    }
+  }
+
   async function criarPrimeiroProjeto(e: FormEvent) {
     e.preventDefault();
     const name = newProjectName.trim();
@@ -514,6 +533,7 @@ export default function MissaoPage() {
 
       {!execution ? <EmptyState onSelect={selecionarAtalho} composer={composer}
         noProject={!projectId} onCreate={() => { setNewProjectName("Meu primeiro projeto"); setShowProjectCreation(true); setErro(null); }}
+        onRosales={() => void criarExemploRosales()} creatingExample={creatingProject}
         creationForm={showProjectCreation && !projectId ? <form onSubmit={criarPrimeiroProjeto} aria-label="Criar primeiro projeto" className="mx-auto mb-5 w-full max-w-3xl rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.045] p-4 text-left">
           <label htmlFor="olympus-new-project-name" className="mb-2 block text-sm font-medium text-zinc-200">Nome do seu primeiro projeto</label>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -529,7 +549,7 @@ export default function MissaoPage() {
   </PainelShell>;
 }
 
-function EmptyState({ onSelect, composer, noProject, onCreate, creationForm }: { onSelect: (value: string) => void; composer: ReactNode; noProject: boolean; onCreate: () => void; creationForm: ReactNode }) {
+function EmptyState({ onSelect, composer, noProject, onCreate, onRosales, creatingExample, creationForm }: { onSelect: (value: string) => void; composer: ReactNode; noProject: boolean; onCreate: () => void; onRosales: () => void; creatingExample: boolean; creationForm: ReactNode }) {
   return <section className="olympus-welcome relative mx-auto flex w-full max-w-4xl flex-1 flex-col items-center overflow-hidden px-4 pb-8 pt-7 text-center sm:px-6 sm:pt-9">
     <div className="olympus-aura" aria-hidden="true" />
     <div className="relative z-10 flex w-full flex-col items-center">
@@ -539,7 +559,9 @@ function EmptyState({ onSelect, composer, noProject, onCreate, creationForm }: {
       {noProject && <div className="mt-5 w-full max-w-3xl rounded-2xl border border-white/[0.10] bg-white/[0.025] p-4 text-left">
         <p className="text-sm font-medium text-zinc-100">Comece criando seu primeiro projeto</p>
         <p className="mt-1 text-xs leading-5 text-zinc-400">Escolha um nome para salvar seu trabalho. Você não precisa abrir o menu lateral.</p>
-        <button type="button" onClick={onCreate} className="mt-3 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black">Criar primeiro projeto</button>
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={onCreate} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black">Criar primeiro projeto</button>
+        {CLOUD_BETA && <button type="button" onClick={onRosales} disabled={creatingExample} className="rounded-xl border border-emerald-300/30 px-4 py-2.5 text-sm font-semibold text-emerald-100 disabled:opacity-50">{creatingExample ? "Preparando exemplo..." : "Experimentar Rosales Café"}</button>}</div>
+        {CLOUD_BETA && <p className="mt-2 text-xs text-zinc-500">O exemplo é uma página estática validada; não é uma geração por IA.</p>
       </div>}
       <div className="mt-4 w-full max-w-3xl">{creationForm}</div>
       <div className="welcome-composer mt-6 w-full max-w-3xl text-left">{composer}</div>

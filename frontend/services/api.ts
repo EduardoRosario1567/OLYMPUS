@@ -561,7 +561,7 @@ export const api = {
     return data.projects;
   },
 
-  criarCloudProjeto: (payload: { name: string; project_id?: string }) =>
+  criarCloudProjeto: (payload: { name: string; project_id?: string; template?: 'rosales_cafe_mvp' }) =>
     request<CloudProject>('/cloud/projects', {
       method: 'POST',
       body: JSON.stringify(payload),

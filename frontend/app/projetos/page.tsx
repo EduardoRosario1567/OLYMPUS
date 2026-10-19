@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PainelShell } from "@/components/layout/painel-shell";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ function formatarData(value: number) {
 
 export default function ProjetosPage() {
   const pronto = useRequireAuth();
+  const router = useRouter();
   const [projetos, setProjetos] = useState<CloudProject[] | null>(null);
   const [nome, setNome] = useState("");
   const [criando, setCriando] = useState(false);
@@ -35,6 +37,23 @@ export default function ProjetosPage() {
     finally { setCriando(false); }
   }
 
+  async function iniciarRosales() {
+    if (criando) return;
+    setCriando(true);
+    setErro(null);
+    try {
+      const name = "Rosales Café — MVP de validação";
+      const existing = projetos?.find((project) => project.name === name);
+      const projeto = existing ?? await api.criarCloudProjeto({ name, template: "rosales_cafe_mvp" });
+      setProjetos((current) => [projeto, ...(current ?? []).filter((item) => item.project_id !== projeto.project_id)]);
+      router.push("/missao?project_id=" + encodeURIComponent(projeto.project_id));
+    } catch {
+      setErro("Não foi possível preparar o exemplo Rosales Café.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
   async function baixar(projeto: CloudProject) {
     try { await api.baixarCloudProjeto(projeto.project_id); setErro(null); }
     catch { setErro(`Não foi possível baixar ${projeto.name}.`); }
@@ -46,6 +65,11 @@ export default function ProjetosPage() {
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="mb-8"><p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-700">Seu espaço</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-zinc-100">Projetos</h1><p className="mt-2 text-sm text-zinc-500">Continue uma criação, consulte versões ou baixe seus arquivos.</p></header>
       <div className="mb-6 flex gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-2"><Input value={nome} onChange={(event) => setNome(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void criar(); } }} placeholder="Nome do novo projeto" /><Button type="button" onClick={criar} disabled={!nome.trim() || criando}>{criando ? "Criando" : "Criar projeto"}</Button></div>
+      <div className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-300/[0.035] p-4">
+        <h2 className="text-sm font-semibold text-zinc-100">Projeto mínimo para experimentar</h2>
+        <p className="mt-1 text-xs leading-5 text-zinc-400">Rosales Café: página estática responsiva, validada no navegador, pronta para visualizar e baixar. Não utiliza geração por IA.</p>
+        <button type="button" onClick={() => void iniciarRosales()} disabled={criando || !projetos} className="mt-3 rounded-xl bg-emerald-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 disabled:opacity-50">{criando ? "Preparando..." : "Abrir exemplo Rosales Café"}</button>
+      </div>
       {erro && <p className="mb-4 rounded-xl bg-rose-400/[0.07] px-4 py-3 text-sm text-rose-200/80">{erro}</p>}
       {!projetos && !erro && <p className="py-16 text-center text-sm text-zinc-600">Carregando projetos...</p>}
       {projetos?.length === 0 && <div className="rounded-2xl border border-dashed border-white/[0.08] py-16 text-center"><p className="text-sm text-zinc-500">Seu primeiro projeto começa com uma ideia.</p><Link href="/missao" className="mt-4 inline-flex rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black">Nova missão</Link></div>}
