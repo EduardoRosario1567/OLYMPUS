@@ -35,7 +35,7 @@ try{
   });
   const unknown=audit.text.filter(t=>!allowed.has(t));
   if(unknown.length||audit.broken.length||errors.length||external.length||audit.overflow||
-    audit.bodyBg!=='rgb(253, 248, 242)'||audit.h1!==1||audit.main!==0||
+    audit.bodyBg!=='rgb(253, 248, 242)'||audit.h1!==1||audit.main!==1||
     audit.ctaTag!=='A'||audit.ctaHeight<44)
    throw Error('BASIC_QA '+JSON.stringify({name,unknown,broken:audit.broken,errors,external,overflow:audit.overflow,bg:audit.bodyBg,h1:audit.h1,main:audit.main,cta:audit.ctaTag,ctaHeight:audit.ctaHeight}));
   await page.screenshot({path:join(evidence,'rosales-v3-'+name+'.png'),fullPage:true});
