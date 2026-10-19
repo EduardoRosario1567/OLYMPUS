@@ -195,7 +195,10 @@ def save_generated_files(root: Path, html: str, css: str) -> dict[str,str]:
     current={p.name for p in root.iterdir()}
     if current!={"index.html","style.css"} or any(p.is_symlink() for p in root.iterdir()):
         raise RosalesAIError("Project has unexpected files: aborting")
+    from olympus.cloud.project_templates import INDEX_HTML, STYLE_CSS
     old={name:(root/name).read_bytes() for name in hashes}
+    if old["index.html"]!=INDEX_HTML.encode("utf-8") or old["style.css"]!=STYLE_CSS.encode("utf-8"):
+        raise RosalesAIError("Project template was previously changed: refusing overwrite")
     changes={"index.html":html.encode("utf-8"),"style.css":css.encode("utf-8")}
     try:
         for name,content in changes.items():
