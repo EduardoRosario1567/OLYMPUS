@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
 const URL='http://127.0.0.1:4173/';
-const server=spawn('npm',['run','preview'],{cwd:process.cwd(),stdio:'pipe'});
+const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview','--host','127.0.0.1','--port','4173'],{cwd:process.cwd(),stdio:'pipe'});
+server.stdout.resume();
 let stderr='';
 server.stderr.on('data',chunk=>{stderr+=String(chunk).slice(0,400)});
 async function waitServer(){
