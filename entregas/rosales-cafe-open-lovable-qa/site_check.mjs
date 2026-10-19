@@ -38,7 +38,7 @@ try{
   if(await page.evaluate(()=>location.hash)!=='#concept')throw Error('Anchor navigation failed');
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
   if(overflow)throw Error('Horizontal overflow at '+v.width);
-  const color=await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor);
+  const color=await page.locator('#root > div').evaluate(el=>getComputedStyle(el).backgroundColor);
   if(color==='rgba(0, 0, 0, 0)')throw Error('CSS not applied');
   if(errors.length||offsite.length)throw Error('Browser failure '+JSON.stringify({errors,offsite}));
   await page.screenshot({path:'evidence/rosales-open-lovable-'+v.name+'.png',fullPage:true});
