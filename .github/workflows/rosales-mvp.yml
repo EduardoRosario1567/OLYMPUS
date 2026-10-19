@@ -1,0 +1,45 @@
+name: Rosales Café Minimal Static MVP
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - olympus/cloud/project_templates.py
+      - backend/app/api/cloud_projects.py
+      - tests/test_rosales_minimal_mvp.py
+      - tests/rosales_mvp_browser.mjs
+      - .github/workflows/rosales-mvp.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-mvp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Test static template, isolation, ZIP, persistence
+        run: python -m unittest discover -s tests -p test_rosales_minimal_mvp.py -v
+      - name: Prepare exact static preview
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from olympus.cloud.project_templates import write_rosales_mvp
+          folder=Path('/tmp/olympus-rosales-mvp')
+          folder.mkdir(exist_ok=True)
+          print("MVP hash", write_rosales_mvp(folder))
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install existing frontend dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Independent browser responsive and navigation checks
+        run: node tests/rosales_mvp_browser.mjs /tmp/olympus-rosales-mvp/index.html
