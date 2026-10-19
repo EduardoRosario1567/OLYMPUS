@@ -125,7 +125,7 @@ def validate_static_files(html: str, css: str) -> dict[str,str]:
     if "\x00" in html or "\x00" in css or "<!ENTITY" in html.upper() or "<!DOCTYPE " in html.upper() and not html.lstrip().lower().startswith("<!doctype html>"):
         raise RosalesAIError("Unexpected document content")
     for pattern in (r"@import\b",r"url\s*\(",r"expression\s*\(",r"-moz-binding\b",
-                    r"javascript\s*:",r"data\s*:",r"@font-face\b",r"behavior\s*:"):
+                    r"javascript\s*:",r"data\s*:",r"@font-face\b",r"(?<!-)behavior\s*:"):
         if re.search(pattern,css,re.I):
             raise RosalesAIError("CSS requires external or unsafe resources")
     parser=_SafeMarkup()
