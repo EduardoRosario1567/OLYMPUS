@@ -26,7 +26,7 @@ _ALLOWED = frozenset({"html","head","meta","title","link","body","header","nav",
     "section","article","div","span","p","h1","h2","h3","h4","strong","em","a","ul","li",
     "ol","footer","small","blockquote","br","hr"})
 _VOID = frozenset({"meta","link","br","hr"})
-_ATTRS = frozenset({"class","id","role","aria-label","aria-hidden","href",
+_ATTRS = frozenset({"class","id","role","aria-label","aria-hidden","aria-labelledby","href",
     "lang","charset","name","content","rel"})
 _IDS = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _CLASS = re.compile(r"^[a-zA-Z0-9_\- ]{0,240}$")
