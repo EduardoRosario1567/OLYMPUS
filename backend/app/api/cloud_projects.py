@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 import mimetypes
 from urllib.parse import quote
 
@@ -9,6 +9,7 @@ from app.core.deps import identidade_com_permissao
 from app.core.saas import PLATFORM
 from olympus.saas.platform import EntitlementError
 from olympus.cloud.attachments import AttachmentTooLarge, MAX_ATTACHMENT_BYTES
+from olympus.cloud.project_templates import TEMPLATE_ID, write_rosales_mvp
 from .cloud_runtime import _ATTACHMENTS, _FILES, _PREVIEWS, _RUNTIME, _STUDIO_RUNTIMES
 
 router = APIRouter(prefix="/cloud/projects", tags=["cloud-projects"])
@@ -18,6 +19,7 @@ _can_write = identidade_com_permissao("projects.write")
 class ProjectCreate(BaseModel):
     project_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=128)
+    template: Optional[Literal["rosales_cafe_mvp"]] = None
 
 class ProjectVersionCreate(BaseModel):
     label: Optional[str] = Field(default=None, max_length=100)
@@ -89,6 +91,8 @@ def create(payload: ProjectCreate, identity=Depends(_can_write)):
         PLATFORM.assert_capacity(identity.tenant_id, "projects", current + 1)
         PLATFORM.record_action(identity.tenant_id, identity.user_id, "project.create_requested", "project", payload.project_id or "generated", {"name": payload.name})
         project = _RUNTIME.projects.create(payload.name, payload.project_id, tenant_id=identity.tenant_id)
+        if payload.template == TEMPLATE_ID:
+            write_rosales_mvp(_RUNTIME.projects.project_root(project.project_id, tenant_id=identity.tenant_id))
         return _view(project)
     except EntitlementError as exc:
         raise HTTPException(status_code=402, detail=str(exc))
