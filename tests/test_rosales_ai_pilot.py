@@ -26,6 +26,17 @@ class TestRosalesAIPilot(unittest.TestCase):
             with self.subTest(change=item[:95]), self.assertRaises(RosalesAIError):
                 validate_static_files(item, STYLE_CSS)
 
+    def test_unverified_business_claims_are_rejected(self):
+        added = INDEX_HTML.replace(
+            "</body>",
+            "<p>Trabalhamos com produtores sustentáveis e oferecemos Wi-Fi gratuito.</p></body>",
+        )
+        with self.assertRaisesRegex(RosalesAIError, "not approved"):
+            validate_static_files(added, STYLE_CSS)
+        css_claim = STYLE_CSS + "\\n.fake:after{content:'Baristas certificados';}"
+        with self.assertRaisesRegex(RosalesAIError, "Unapproved CSS"):
+            validate_static_files(INDEX_HTML, css_claim)
+
     def test_remote_css_is_rejected(self):
         for tail in ('@import "remote.css";','.x{background:url(remote.png)}',
                      '@font-face{src:local(font)}', '.x{behavior:url(x)}',
