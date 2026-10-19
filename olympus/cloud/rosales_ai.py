@@ -83,7 +83,7 @@ class _SafeMarkup(HTMLParser):
                     raise RosalesAIError("Unsafe charset")
             elif values.get("name")=="viewport" and values.get("content")=="width=device-width, initial-scale=1":
                 self.viewport=True
-            elif values.get("name")=="description" and set(values)=={"name","content"}:
+            elif values.get("name") in {"description","color-scheme"} and set(values)=={"name","content"} and (values["name"]!="color-scheme" or values["content"]=="light"):
                 pass
             else:
                 raise RosalesAIError("Unsafe metadata")
