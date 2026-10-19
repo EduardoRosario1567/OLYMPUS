@@ -26,6 +26,10 @@ class OpenLovableError(RuntimeError):
     pass
 
 
+class IncompleteGeneratedCode(OpenLovableError):
+    """An incomplete response may be retried before any remote mutation."""
+
+
 _SESSION_LOCK = threading.Lock()
 _FILE_TAG = re.compile(r'<file\s+path="([^"]{1,220})">([\s\S]*?)</file>')
 _MAX_GENERATED = 3 * 1024 * 1024
@@ -80,7 +84,7 @@ def _files_from_generated(text: str) -> dict[Path, str]:
     opens = len(re.findall(r'<file\s+path="', text))
     closes = text.count('</file>')
     if opens != closes:
-        raise OpenLovableError('Incomplete file tags')
+        raise IncompleteGeneratedCode('Incomplete file tags')
     files = {}
     for match in _FILE_TAG.finditer(text):
         p = _safe_path(match.group(1))
@@ -96,6 +100,75 @@ def _files_from_generated(text: str) -> dict[Path, str]:
     ) for path in files):
         raise OpenLovableError('No application entrypoint generated')
     return files
+
+
+def _command_passed(result: dict) -> bool:
+    """E2B's API exit code is not the child-process exit code."""
+    output = str(result.get('output') or '')
+    final = re.search(r'(?:^|\n)Return code:\s*(-?\d+)\s*\Z', output)
+    return (result.get('success') is True and type(result.get('exitCode')) is int
+            and result['exitCode'] == 0 and final is not None
+            and final.group(1) == '0')
+
+
+def _entrypoint_restore_command(proposed: dict[Path, str]) -> str | None:
+    """Restore generated entrypoints that upstream's applicator rewrites.
+
+    The fixed writer runs only inside the already selected E2B sandbox. Its
+    sole argument has no spaces: upstream runCommand uses command.split(' '),
+    not shell parsing. Model content is JSON/base64 data, never executable
+    writer code. No generated package scripts or dependencies are changed.
+    """
+    names = {'index.html', 'src/main.jsx', 'src/main.tsx'}
+    entries = {str(path): content for path, content in proposed.items()
+               if str(path) in names}
+    if not entries:
+        return None
+    payload = base64.b64encode(json.dumps(entries, ensure_ascii=False).encode()).decode()
+    writer = (
+        "const fs=require('fs'),p=require('path');"
+        "const data=JSON.parse(Buffer.from('" + payload + "','base64').toString('utf8'));"
+        "for(const [name,body]of Object.entries(data)){"
+        "const root=fs.realpathSync('.'),target=fs.realpathSync(name);"
+        "if(target!==p.resolve(root,name)||!fs.lstatSync(name).isFile())"
+        "throw Error('unsafe_entrypoint');fs.writeFileSync(name,body,'utf8');}"
+        "console.log('OLYMPUS_ENTRYPOINTS_RESTORED');"
+    )
+    encoded = base64.b64encode(writer.encode()).decode()
+    # Keep below Linux's per-argument limit and reject rather than truncate.
+    if len(encoded) > 100000:
+        raise OpenLovableError('Entrypoint restoration exceeds command size limit')
+    return "node -e eval(Buffer.from('" + encoded + "','base64').toString('utf8'))"
+
+
+def _verify_presentation_sources(files: dict[Path, str], proposed: dict[Path, str]) -> None:
+    """Catch known compile-green/source-broken failures; not a visual review."""
+    for path, content in proposed.items():
+        if str(path) in {'index.html', 'src/main.jsx', 'src/main.tsx'}:
+            if files.get(path, '').strip() != content.strip():
+                raise OpenLovableError('Generated entrypoint changed during application: ' + str(path))
+    # The applicator has removed stylesheet imports from real missions.
+    # Check every explicitly generated relative CSS import against the snapshot.
+    css_import = re.compile(r"\bimport\s+(?:[^;\n'\"]+?\s+from\s+)?(['\"])(\.[^'\"\n]*\.css)\1")
+    for path, original in proposed.items():
+        if path.suffix not in {'.js', '.jsx', '.ts', '.tsx'}:
+            continue
+        expected = {match.group(2) for match in css_import.finditer(original)}
+        actual = {match.group(2) for match in css_import.finditer(files.get(path, ''))}
+        if not expected.issubset(actual):
+            raise OpenLovableError('Stylesheet import removed during application: ' + str(path))
+        for specifier in expected:
+            parts = list(path.parent.parts)
+            for part in PurePosixPath(specifier).parts:
+                if part == '..':
+                    if not parts:
+                        raise OpenLovableError('Stylesheet import escapes project')
+                    parts.pop()
+                elif part != '.':
+                    parts.append(part)
+            target = _safe_path('/'.join(parts))
+            if target not in files:
+                raise OpenLovableError('Imported stylesheet missing from export: ' + str(target))
 
 
 @contextmanager
@@ -312,13 +385,25 @@ class OpenLovableWebDeveloper:
         if not isinstance(sid, str) or not sid or len(sid) > 200:
             raise OpenLovableError('Sandbox ID missing')
         self.telemetry({'event': 'open_lovable_sandbox_ready'})
-        generated = client.sse('/api/generate-ai-code-stream', {
-            'prompt': task, 'model': client.model, 'context': {'sandboxId': sid}, 'isEdit': False,
-        })
-        code = generated.get('generatedCode')
-        if not isinstance(code, str):
-            raise OpenLovableError('Generated code missing')
-        proposed_files = _files_from_generated(code)
+        prompt = task
+        for attempt in range(2):
+            generated = client.sse('/api/generate-ai-code-stream', {
+                'prompt': prompt, 'model': client.model, 'context': {'sandboxId': sid}, 'isEdit': False,
+            })
+            code = generated.get('generatedCode')
+            if not isinstance(code, str):
+                raise OpenLovableError('Generated code missing')
+            try:
+                proposed_files = _files_from_generated(code)
+                break
+            except IncompleteGeneratedCode:
+                if attempt:
+                    raise
+                self.telemetry({'event': 'open_lovable_generation_retry',
+                                'reason': 'incomplete_file_tags', 'attempt': 2})
+                prompt = (task + '\n\nThe previous response was truncated. Regenerate the COMPLETE '
+                          'files using closed <file path="...">...</file> blocks. '
+                          'Use concise complete code, no commentary and no unfinished sections.')
         applied = client.sse('/api/apply-ai-code-stream', {
             'response': code, 'isEdit': False, 'packages': [], 'sandboxId': sid,
         })
@@ -336,12 +421,18 @@ class OpenLovableWebDeveloper:
         # The upstream uses global process state: check the sandbox identity
         # before build and again after the authoritative source export.
         self._confirm_sandbox(client, sid)
+        restore = _entrypoint_restore_command(proposed_files)
+        if restore is not None:
+            restored = client.json('/api/run-command-v2', {'command': restore})
+            if (not _command_passed(restored) or
+                    'OLYMPUS_ENTRYPOINTS_RESTORED' not in str(restored.get('output') or '')):
+                raise OpenLovableError('Generated entrypoints could not be preserved')
+            self._confirm_sandbox(client, sid)
+            self.telemetry({'event': 'open_lovable_entrypoints_preserved'})
         # E2B runCommand currently wraps subprocess and reports a generic
         # success even when npm fails: parse the subprocess return code too.
         build = client.json('/api/run-command-v2', {'command': 'npm run build'})
-        output = str(build.get('output') or '')
-        if (build.get('success') is not True or build.get('exitCode') != 0
-                or not re.search(r'(?m)^Return code:\s*0\s*$', output)):
+        if not _command_passed(build):
             raise OpenLovableError('React build did not pass inside sandbox')
         self.telemetry({'event': 'open_lovable_build_passed', 'sandbox': 'e2b'})
         # Contract requires a patched dedicated upstream. Vanilla
@@ -355,6 +446,7 @@ class OpenLovableWebDeveloper:
         except (OpenLovableError, TypeError) as exc:
             raise OpenLovableError('Sandbox export unavailable or incompatible') from exc
         files, digest = _verify_export(export, sid, expected_files)
+        _verify_presentation_sources(files, proposed_files)
         self._confirm_sandbox(client, sid)
         root = self.workspace
         root.mkdir(parents=True, exist_ok=True)
@@ -389,7 +481,9 @@ class OpenLovableWebDeveloper:
         self.telemetry({'event': 'open_lovable_files_ready', 'count': len(output)})
         return DeveloperReport(
             task, 'completed', True, (client.model,), (), tuple(str(p) for p in output),
-            ('sandbox_react_build',), 1,
+            ('sandbox_react_build', 'export_source_integrity'), attempt + 1,
             delivery_review={'engine': 'open_lovable', 'build': 'passed_remote',
-                             'export_sha256': digest, 'browser': 'pending'}
+                             'export_sha256': digest, 'browser': 'pending',
+                             'source_integrity': 'passed',
+                             'scope': 'source_and_build_only', 'visual': 'pending'}
         )
