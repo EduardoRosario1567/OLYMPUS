@@ -5,6 +5,8 @@ on:
     paths:
       - olympus/cloud/rosales_ai.py
       - tests/test_rosales_ai_pilot.py
+      - tests/test_rosales_ai_endpoint.py
+      - backend/app/api/cloud_projects.py
       - .github/workflows/rosales-ai-tests.yml
   workflow_dispatch:
 permissions:
@@ -18,5 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install Python API dependencies
+        run: python -m pip install -r backend/requirements.txt
       - name: Check Rosales AI validation and persistence
-        run: python -m unittest discover -s tests -p test_rosales_ai_pilot.py -v
+        run: |
+          python -m unittest discover -s tests -p test_rosales_ai_pilot.py -v
+          python -m unittest discover -s tests -p test_rosales_ai_endpoint.py -v
