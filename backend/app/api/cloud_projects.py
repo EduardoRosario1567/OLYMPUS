@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
+import os
+import hmac
 import mimetypes
 from urllib.parse import quote
 
@@ -9,7 +11,10 @@ from app.core.deps import identidade_com_permissao
 from app.core.saas import PLATFORM
 from olympus.saas.platform import EntitlementError
 from olympus.cloud.attachments import AttachmentTooLarge, MAX_ATTACHMENT_BYTES
-from olympus.cloud.project_templates import TEMPLATE_ID, write_rosales_mvp
+from olympus.cloud.project_templates import TEMPLATE_ID, INDEX_HTML, STYLE_CSS, write_rosales_mvp
+from olympus.cloud.rosales_ai import (
+    RosalesAIError, generate_rosales_static, pilot_generation_guard, save_generated_files,
+)
 from .cloud_runtime import _ATTACHMENTS, _FILES, _PREVIEWS, _RUNTIME, _STUDIO_RUNTIMES
 
 router = APIRouter(prefix="/cloud/projects", tags=["cloud-projects"])
@@ -104,6 +109,55 @@ def create(payload: ProjectCreate, identity=Depends(_can_write)):
 @router.get("")
 def list_projects(limit: int = 100, identity=Depends(_can_read)):
     return {"projects": [_view(item) for item in _RUNTIME.projects.list(limit, tenant_id=identity.tenant_id)]}
+
+@router.post("/{project_id}/rosales-ai")
+def generate_rosales_pilot(project_id: str, identity=Depends(_can_write)):
+    """Owner-only static text generation. Not the general cloud mission runner."""
+    if (os.environ.get("OLYMPUS_ENV","").strip().lower()!="staging" or
+        os.environ.get("OLYMPUS_ROSALES_AI_PILOT")!="1"):
+        raise HTTPException(status_code=503,detail="Geração restrita em homologação.")
+    admin=os.environ.get("OLYMPUS_ADMIN_EMAIL","").strip().lower()
+    if not admin or not hmac.compare_digest(identity.email.strip().lower(),admin):
+        raise HTTPException(status_code=403,detail="Piloto restrito ao administrador.")
+    project=_RUNTIME.projects.get(project_id)
+    if project is None or project.tenant_id!=identity.tenant_id:
+        raise HTTPException(status_code=404,detail="Projeto não encontrado.")
+    if project.name!="Rosales Café — MVP de validação":
+        raise HTTPException(status_code=409,detail="O piloto usa exclusivamente o exemplo Rosales Café.")
+    if _RUNTIME.project_is_busy(project_id,identity.tenant_id):
+        raise HTTPException(status_code=409,detail="Projeto com missão ativa.")
+    # Model and key must be explicitly configured. No hidden paid fallback.
+    key=os.environ.get("GROQ_API_KEY","")
+    model=os.environ.get("OLYMPUS_ROSALES_GROQ_MODEL","")
+    if not key or not model:
+        raise HTTPException(status_code=503,detail="Provedor gratuito do piloto não está configurado.")
+    root=_RUNTIME.projects.project_root(project_id,tenant_id=identity.tenant_id)
+    try:
+        with pilot_generation_guard(_RUNTIME.data_dir,identity.tenant_id,project_id):
+            # Recheck while holding the cross-worker lock to avoid a second spend.
+            if ({p.name for p in root.iterdir()}!={"index.html","style.css"} or
+                (root/"index.html").is_symlink() or (root/"style.css").is_symlink() or
+                (root/"index.html").read_bytes()!=INDEX_HTML.encode("utf-8") or
+                (root/"style.css").read_bytes()!=STYLE_CSS.encode("utf-8")):
+                raise RosalesAIError("Project was already edited or generated")
+            html,css=generate_rosales_static(key,model)
+            # Preserve the working starter template before replacing it.
+            backup=_RUNTIME.versions.capture(project_id,
+                label="Antes da geração com IA — Rosales Café",
+                reason="rosales_ai_pilot",tenant_id=identity.tenant_id)
+            digests=save_generated_files(root,html,css)
+            PLATFORM.record_action(identity.tenant_id,identity.user_id,
+                "rosales_ai_pilot.completed","project",project_id,
+                {"provider":"groq","static_only":True,"files":sorted(digests)})
+            return {"status":"completed","project_id":project_id,
+                    "files":digests,"backup_version_id":backup.version_id,
+                    "provider":"groq","static_only":True}
+    except RosalesAIError:
+        # Never expose provider body, credentials, or raw HTML.
+        raise HTTPException(status_code=409,detail="Geração não homologada nesta tentativa; projeto original preservado.") from None
+    except OSError:
+        raise HTTPException(status_code=503,detail="Armazenamento do projeto indisponível.") from None
+
 
 @router.get("/{project_id}/download")
 def download_project(project_id: str, identity=Depends(_can_read)):
