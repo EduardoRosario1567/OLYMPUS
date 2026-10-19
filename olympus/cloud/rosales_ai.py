@@ -37,6 +37,25 @@ class RosalesAIError(RuntimeError):
     """Public errors must never include model prompts, secrets, or response bodies."""
 
 
+class _VisibleBrandCopy(HTMLParser):
+    """Collect only user-visible text, ignoring structural whitespace."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.fragments = []
+
+    def handle_data(self, data):
+        fragment = " ".join(data.split())
+        if fragment:
+            self.fragments.append(fragment)
+
+
+def _visible_copy(text: str) -> set[str]:
+    parser = _VisibleBrandCopy()
+    parser.feed(text)
+    parser.close()
+    return set(parser.fragments)
+
+
 class _SafeMarkup(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -141,6 +160,16 @@ def validate_static_files(html: str, css: str) -> dict[str,str]:
     except (ValueError, AssertionError) as exc:
         raise RosalesAIError("Invalid HTML") from None
     parser.finalize()
+    # The approved reference template is the only authorized factual source.
+    # Unknown marketing claims must never be committed without human evidence.
+    from olympus.cloud.project_templates import INDEX_HTML
+    approved_copy = _visible_copy(INDEX_HTML)
+    if not _visible_copy(html).issubset(approved_copy):
+        raise RosalesAIError("Generated brand copy is not approved")
+    # CSS-generated visible copy could bypass the HTML text gate.
+    for css_content in re.findall(r"(?<![\\w-])content\\s*:\\s*([^;}]+)", css, flags=re.I):
+        if css_content.strip() not in ("''", '\"\"'):
+            raise RosalesAIError("Unapproved CSS-generated copy")
     if not re.search(r"Rosales\s+Caf[eé]",html,re.I) or "Col[oô]mb" not in html and "colomb" not in html.lower():
         raise RosalesAIError("Wrong brand context")
     return {"index.html":sha256(hb).hexdigest(),"style.css":sha256(cb).hexdigest()}
@@ -160,6 +189,14 @@ content="width=device-width, initial-scale=1"; uma h1, main, nav e seções
 id=inicio, id=conceito, id=experiencia. Links apenas ancoras #id existentes.
 CSS sem url(), @import, @font-face. Ilustração de xícara apenas CSS.
 Mantenha resposta enxuta, mas completa; não inclua blocos markdown."""
+# No original facts about a physical store, suppliers, products, prices or services
+# are known. Fixing allowed copy makes this proof deterministic and conservative.
+from olympus.cloud.project_templates import INDEX_HTML as _APPROVED_HTML
+_SYSTEM += ("\\nUse EXCLUSIVAMENTE os fragmentos de texto abaixo nas áreas visíveis, "
+            "copiados literalmente e sem juntá-los nem acrescentar outros. "
+            "Você pode mudar apenas a composição de HTML e CSS: "
+            + json.dumps(sorted(_visible_copy(_APPROVED_HTML)), ensure_ascii=False))
+
 
 
 def generate_rosales_static(api_key: str, model: str, *, opener=None) -> tuple[str,str]:
