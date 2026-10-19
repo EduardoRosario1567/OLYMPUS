@@ -28,7 +28,9 @@ class TestRosalesAIPilot(unittest.TestCase):
 
     def test_remote_css_is_rejected(self):
         for tail in ('@import "remote.css";','.x{background:url(remote.png)}',
-                     '@font-face{src:local(font)}', '.x{behavior:url(x)}'):
+                     '@font-face{src:local(font)}', '.x{behavior:url(x)}',
+                     '@namespace "https://invalid.example";',
+                     '@\\69mport "https://invalid.example";'):
             with self.subTest(tail=tail), self.assertRaises(RosalesAIError):
                 validate_static_files(INDEX_HTML, STYLE_CSS + tail)
 
