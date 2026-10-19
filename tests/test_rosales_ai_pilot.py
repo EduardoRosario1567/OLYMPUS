@@ -33,7 +33,7 @@ class TestRosalesAIPilot(unittest.TestCase):
         )
         with self.assertRaisesRegex(RosalesAIError, "not approved"):
             validate_static_files(added, STYLE_CSS)
-        css_claim = STYLE_CSS + "\\n.fake:after{content:'Baristas certificados';}"
+        css_claim = STYLE_CSS + "\n.fake:after{content:'Baristas certificados';}"
         with self.assertRaisesRegex(RosalesAIError, "Unapproved CSS"):
             validate_static_files(INDEX_HTML, css_claim)
 
