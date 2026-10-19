@@ -51,7 +51,7 @@ class TestRosalesAIPilot(unittest.TestCase):
             record = projects.create("Rosales Café — MVP de validação", tenant_id="a")
             root = projects.project_root(record.project_id, tenant_id="a")
             write_rosales_mvp(root)
-            edited = INDEX_HTML.replace("aprecia o momento.", "transforma o momento.")
+            edited = INDEX_HTML.replace('class="hero"', 'class="hero hero-ai"')
             changed_css = STYLE_CSS + "\n/* validated */"
             result = save_generated_files(root, edited, changed_css)
             self.assertEqual(set(result), {"index.html", "style.css"})
@@ -60,7 +60,7 @@ class TestRosalesAIPilot(unittest.TestCase):
             preview = ProjectPreviewSessions(projects).create(record.project_id, tenant_id="a")
             self.assertEqual(preview.entrypoint, "index.html")
             restarted = ProjectWorkspaceManager(directory)
-            self.assertIn("transforma o momento.", (restarted.project_root(record.project_id, tenant_id="a") / "index.html").read_text("utf-8"))
+            self.assertIn("hero-ai", (restarted.project_root(record.project_id, tenant_id="a") / "index.html").read_text("utf-8"))
             with self.assertRaises(KeyError):
                 restarted.project_root(record.project_id, tenant_id="b")
 
