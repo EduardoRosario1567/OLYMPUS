@@ -71,7 +71,7 @@ class TestCloudRuntime(unittest.TestCase):
             runtime = CloudRuntime(tmp, factory, max_workers=1)
             self.addCleanup(runtime.close)
             rec = runtime.submit("p1", "Create helper", max_iterations=7)
-            self.assertIn(rec.status, {"queued", "running", "completed"})
+            self.assertIn(rec.status, {"queued", "running", "verifying", "completed"})
             deadline = time.time() + 2
             current = rec
             while current.status not in {"completed", "failed", "blocked", "cancelled"} and time.time() < deadline:

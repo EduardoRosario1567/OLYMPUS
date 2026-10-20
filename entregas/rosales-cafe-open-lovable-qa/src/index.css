@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Coffee cup illustration */
+.coffee-cup {
+  width: 80px;
+  height: 100px;
+  background: #c49e71; /* coffee tone */
+  border-radius: 0 0 50% 50%;
+  position: relative;
+  margin: 0 auto;
+}
+.coffee-cup::before {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: -20px;
+  width: 30px;
+  height: 50px;
+  border: 10px solid #c49e71;
+  border-left: none;
+  border-radius: 0 50% 50% 0;
+}

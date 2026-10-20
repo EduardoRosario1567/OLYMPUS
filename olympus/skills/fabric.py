@@ -25,7 +25,9 @@ class SkillsFabric:
         self.root = Path(root or _ROOT).resolve()
         self.tenant_id = str(tenant_id)
         tenant_key = hashlib.sha256(self.tenant_id.encode()).hexdigest()
-        self.state_path = self.root / ".olympus" / "skills-fabric" / (tenant_key + ".json")
+        state_dir = os.environ.get("OLYMPUS_SKILLS_FABRIC_STATE_DIR", "").strip()
+        base = Path(state_dir).resolve() if state_dir else self.root / ".olympus" / "skills-fabric"
+        self.state_path = base / (tenant_key + ".json")
 
     def settings(self):
         try:

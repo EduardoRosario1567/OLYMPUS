@@ -363,7 +363,10 @@ class ProjectRuntimeManager:
             return False
 
     def start(self, project_id: str, tenant_id: str = "local") -> RuntimeSession:
-        production = os.environ.get("OLYMPUS_ENV", "development").strip().lower() in {"production", "prod"}
+        mode = os.environ.get("OLYMPUS_ENV", "development").strip().lower()
+        if mode == "staging":
+            raise RuntimeError("Previews executáveis sem isolamento estão bloqueados no staging.")
+        production = mode in {"production", "prod"}
         if production and os.environ.get("OLYMPUS_ALLOW_UNSANDBOXED_PREVIEW", "").lower() not in {"1", "true", "yes"}:
             raise RuntimeError("Preview executável exige sandbox de container em produção.")
         info = self.detect(project_id, tenant_id)

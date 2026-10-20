@@ -1,0 +1,39 @@
+name: Rosales Open Lovable — independent Vite / Chromium audit
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - 'frontend/fixtures/rosales-open-lovable/**'
+      - 'tests/rosales_lovable_e2e.mjs'
+      - '.github/workflows/rosales-open-lovable-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare same React and Chromium versions already used by OLYMPUS
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm install --no-save --ignore-scripts vite@5.4.21
+          npx playwright install --with-deps chromium
+      - name: Independently build the preserved Open Lovable generated source
+        working-directory: frontend
+        run: ./node_modules/.bin/vite build fixtures/rosales-open-lovable
+      - name: Compare SHA-256 and verify responsive behavior in Chromium
+        run: node tests/rosales_lovable_e2e.mjs
+      - name: Preserve the independent iPhone and desktop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosales-open-lovable-visual-evidence
+          path: /tmp/rosales-open-lovable-*.png
+          if-no-files-found: ignore
+          retention-days: 14

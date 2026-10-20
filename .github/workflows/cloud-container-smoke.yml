@@ -1,0 +1,196 @@
+name: OLYMPUS private cloud containers
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - .dockerignore
+      - frontend/**
+      - backend/**
+      - olympus/**
+      - vendor/**
+      - .github/workflows/cloud-container-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cloud-same-origin-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend and frontend from repository root
+        run: |
+          docker build --pull -f backend/Dockerfile -t olympus-beta-backend:ci .
+          docker build --pull -f frontend/Dockerfile -t olympus-beta-frontend:ci .
+      - name: Start one isolated backend and same-origin frontend
+        run: |
+          set -euo pipefail
+          docker network create olympus-beta-ci
+          docker volume create olympus-beta-ci-data
+          ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          JWT_SECRET="$(openssl rand -hex 48)"
+          docker run -d --name olympus-ci-backend --network olympus-beta-ci \
+            -v olympus-beta-ci-data:/data \
+            --network-alias olympus-cloud-backend.railway.internal \
+            -e OLYMPUS_ENV=staging \
+            -e OLYMPUS_CLOUD_DATA_DIR=/data \
+            -e OLYMPUS_CLOUD_WORKERS=1 \
+            -e OLYMPUS_ENABLE_LEGACY_API=0 \
+            -e OLYMPUS_ADMIN_EMAIL=ci-admin@example.invalid \
+            -e "OLYMPUS_ADMIN_SENHA=$ADMIN_PASSWORD" \
+            -e "OLYMPUS_JWT_SECRET=$JWT_SECRET" \
+            olympus-beta-backend:ci
+          docker run -d --name olympus-ci-frontend --network olympus-beta-ci \
+            -p 127.0.0.1:18080:3000 olympus-beta-frontend:ci
+          READY=0
+          for i in $(seq 1 35); do
+            FRONT=$(curl --max-time 4 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/login || true)
+            PROXY=$(curl --max-time 4 -sS -o /tmp/olympus-health.json -w '%{http_code}' http://127.0.0.1:18080/api/olympus/health || true)
+            if [ "$FRONT" = 200 ] && [ "$PROXY" = 200 ]; then READY=1; break; fi
+            if [ "$i" -eq 1 ] || [ "$i" -eq 10 ] || [ "$i" -eq 25 ]; then
+              echo "SMOKE_WAIT frontend=$FRONT backend_via_proxy=$PROXY"
+            fi
+            sleep 2
+          done
+          if [ "$READY" != 1 ]; then
+            echo "SMOKE_FAILED frontend=$FRONT proxy=$PROXY"
+            echo "Backend process state:"
+            docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' olympus-ci-backend || true
+            echo "Frontend process state:"
+            docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' olympus-ci-frontend || true
+            echo "Direct internal backend fetch:"
+            docker exec olympus-ci-frontend node -e "fetch('http://olympus-cloud-backend.railway.internal:8000/health').then(r=>console.log('backend_internal_http',r.status)).catch(e=>console.log('backend_internal_failure',e.name,e.message))" || true
+            echo "Last backend and frontend logs:"
+            docker logs olympus-ci-backend 2>&1 | tail -n 60 || true
+            docker logs olympus-ci-frontend 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, urllib.request, urllib.error
+          with open('/tmp/olympus-health.json', encoding='utf-8') as f:
+              info=json.load(f)
+          assert info['status']=='ok',info
+          assert 'version' in info
+          url='http://127.0.0.1:18080/api/olympus/cloud/missions'
+          request=urllib.request.Request(url, data=b'{}',
+                   headers={'Content-Type':'application/json'},method='POST')
+          try:
+              urllib.request.urlopen(request,timeout=8)
+          except urllib.error.HTTPError as error:
+              assert error.code in (401,403),f'unauthorized mission returned {error.code}'
+          else:
+              raise AssertionError('Unauthenticated mission request was accepted')
+          print('CLOUD_SMOKE_OK: frontend login + same-origin backend health + mission authorization')
+          PY
+      - name: Validate staging fails closed without JWT secret
+        run: |
+          if docker run --rm -e OLYMPUS_ENV=staging olympus-beta-backend:ci \
+             python -c 'from app.main import app' ; then
+            echo 'UNSAFE: staging started without JWT secret'; exit 1
+          fi
+          echo 'Staging JWT startup guard rejects missing secret'
+      - name: Verify project creation persists across backend restart
+        run: |
+          set -euo pipefail
+          ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          JWT_SECRET="$(openssl rand -hex 48)"
+          docker network create olympus-persist-ci
+          docker volume create olympus-persist-data
+          docker run -d --name olympus-persist-backend --network olympus-persist-ci \
+            -p 127.0.0.1:18082:8000 -v olympus-persist-data:/data \
+            -e OLYMPUS_ENV=staging \
+            -e OLYMPUS_CLOUD_DATA_DIR=/data \
+            -e OLYMPUS_ADMIN_EMAIL=ci-admin@example.invalid \
+            -e "OLYMPUS_ADMIN_SENHA=$ADMIN_PASSWORD" \
+            -e "OLYMPUS_JWT_SECRET=$JWT_SECRET" \
+            -e OLYMPUS_CLOUD_WORKERS=1 \
+            -e OLYMPUS_OPEN_LOVABLE_ENABLED=0 \
+            -e OLYMPUS_MISSION_SANDBOX_VERIFIED=0 \
+            olympus-beta-backend:ci
+          for i in $(seq 1 55); do
+            if curl -fsS http://127.0.0.1:18082/health -o /dev/null; then break; fi
+            sleep 1
+          done
+          ADMIN_PASSWORD_FOR_TEST="$ADMIN_PASSWORD" python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          base="http://127.0.0.1:18082"
+          def call(method, path, body=None, token=None):
+              headers={"Content-Type":"application/json"}
+              if token:
+                  headers["Authorization"]="Bearer "+token
+              raw=json.dumps(body).encode() if body is not None else None
+              req=urllib.request.Request(base+path,data=raw,headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=12) as response:
+                  return response.status,json.loads(response.read())
+          status,login=call("POST","/auth/login",{"email":"ci-admin@example.invalid","senha":os.environ["ADMIN_PASSWORD_FOR_TEST"]})
+          assert status==200
+          token=login["access_token"]
+          status,created=call("POST","/cloud/projects",{"name":"Projeto de persistência CI"},token)
+          assert status==201 and created["project_id"]
+          status,listed=call("GET","/cloud/projects",token=token)
+          assert any(p["project_id"]==created["project_id"] for p in listed["projects"])
+          status,rosales=call("POST","/cloud/projects",{"name":"Rosales Café — integração CI","template":"rosales_cafe_mvp"},token)
+          assert status==201 and rosales["project_id"]
+          pid=rosales["project_id"]
+          status,files=call("GET",f"/cloud/projects/{pid}/files",token=token)
+          assert status==200 and sorted(x["path"] for x in files["files"])==["index.html","style.css"]
+          status,preview=call("POST",f"/cloud/projects/{pid}/preview-session",{},token)
+          assert status==201 and preview["kind"]=="static"
+          with urllib.request.urlopen(urllib.request.Request(base+preview["preview_url"]),timeout=12) as res:
+              html=res.read().decode("utf-8")
+              assert res.status==200 and "Rosales Café" in html and 'href="#conceito"' in html
+          with urllib.request.urlopen(urllib.request.Request(base+preview["preview_url"].replace("index.html","style.css")),timeout=12) as res:
+              css=res.read().decode("utf-8")
+              assert res.status==200 and "@media(max-width:760px)" in css
+          with urllib.request.urlopen(urllib.request.Request(base+f"/cloud/projects/{pid}/download",headers={"Authorization":"Bearer "+token}),timeout=12) as res:
+              head=res.read(2)
+              assert res.status==200 and head==b"PK"
+          print("ROSALES_REAL_HTTP_API_PREVIEW_ZIP_OK")
+          with open("/tmp/olympus-persist-result.json","w",encoding="utf-8") as handle:
+              json.dump({"project_id":created["project_id"],"rosales_id":pid,"token":token},handle)
+          os.chmod("/tmp/olympus-persist-result.json",0o600)
+          print("CLOUD_PROJECT_CREATED_FOR_RESTART_TEST")
+          PY
+          docker restart olympus-persist-backend >/dev/null
+          for i in $(seq 1 55); do
+            if curl -fsS http://127.0.0.1:18082/health -o /dev/null; then break; fi
+            sleep 1
+          done
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error
+          with open("/tmp/olympus-persist-result.json",encoding="utf-8") as handle:
+              state=json.load(handle)
+          headers={"Authorization":"Bearer "+state["token"]}
+          req=urllib.request.Request("http://127.0.0.1:18082/cloud/projects",headers=headers)
+          with urllib.request.urlopen(req,timeout=12) as response:
+              data=json.load(response)
+          assert any(p["project_id"]==state["project_id"] for p in data["projects"])
+          assert any(p["project_id"]==state["rosales_id"] for p in data["projects"])
+          req=urllib.request.Request("http://127.0.0.1:18082/cloud/projects/"+state["rosales_id"]+"/file?path=index.html",headers=headers)
+          with urllib.request.urlopen(req,timeout=12) as response:
+              html=json.load(response)["content"]
+          assert "Rosales Café" in html and 'href="#conceito"' in html
+          print("ROSALES_PROJECT_PERSISTS_AFTER_RESTART")
+          req=urllib.request.Request("http://127.0.0.1:18082/cloud/missions",
+              data=json.dumps({"project_id":state["project_id"],"task":"Crie um site"}).encode(),
+              headers={**headers,"Content-Type":"application/json"},method="POST")
+          try:
+              urllib.request.urlopen(req,timeout=12)
+          except urllib.error.HTTPError as error:
+              assert error.code==503, f"Unsafe mission bypass: {error.code}"
+          else:
+              raise AssertionError("Unaudited cloud mission unexpectedly started")
+          print("CLOUD_PROJECT_PERSISTENCE_OK; MISSION_GATE_503_OK")
+          PY
+          rm -f /tmp/olympus-persist-result.json
+          docker rm -f olympus-persist-backend >/dev/null
+          docker network rm olympus-persist-ci >/dev/null
+          docker volume rm olympus-persist-data >/dev/null
+      - name: Container logs and cleanup
+        if: always()
+        run: |
+          docker logs olympus-ci-backend 2>/dev/null | tail -n 50 || true
+          docker logs olympus-ci-frontend 2>/dev/null | tail -n 50 || true
+          docker rm -f olympus-ci-frontend olympus-ci-backend 2>/dev/null || true
+          docker network rm olympus-beta-ci 2>/dev/null || true
+          docker volume rm olympus-beta-ci-data 2>/dev/null || true

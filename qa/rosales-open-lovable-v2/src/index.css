@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Abstract cup drawn with CSS */
+.cup {
+  width: 120px;
+  height: 120px;
+  border: 8px solid #b5651d;
+  border-bottom: none;
+  border-radius: 60px 60px 0 0;
+  margin: auto;
+  position: relative;
+}
+.cup::after {
+  content: "";
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border: 8px solid #b5651d;
+  border-left: none;
+  border-right: none;
+  border-radius: 0 0 20px 20px;
+}
+
+/* Simple fade‑in animation */
+.animate-fade-in {
+  animation: fadeIn 1s ease-out forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 390px) {
+  .cup {
+    width: 80px;
+    height: 80px;
+    border-width: 6px;
+  }
+  .cup::after {
+    width: 30px;
+    height: 30px;
+    bottom: -15px;
+  }
+  .text-4xl { font-size: 1.75rem; }   /* ~28px */
+  .text-6xl { font-size: 2.25rem; }   /* ~36px */
+  .text-3xl { font-size: 1.5rem; }    /* ~24px */
+  .text-2xl { font-size: 1.25rem; }   /* ~20px */
+}
+@media (min-width: 1440px) {
+  .cup {
+    width: 150px;
+    height: 150px;
+    border-width: 10px;
+  }
+  .cup::after {
+    width: 50px;
+    height: 50px;
+    bottom: -25px;
+  }
+  .text-4xl { font-size: 3rem; }      /* ~48px */
+  .text-6xl { font-size: 4rem; }      /* ~64px */
+  .text-3xl { font-size: 2.25rem; }   /* ~36px */
+  .text-2xl { font-size: 1.875rem; }  /* ~30px */
+}

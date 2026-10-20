@@ -1,0 +1,80 @@
+name: Rosales Open Lovable V3 visual QA
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - qa/rosales-open-lovable-v3-fixed/**
+      - .github/workflows/rosales-open-lovable-qa.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-generated-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Assemble isolated Vite / React / Tailwind test harness
+        run: |
+          mkdir -p /tmp/rosales-open-lovable-v3-fixed/src /tmp/rosales-open-lovable-v3-fixed/evidence
+          cp qa/rosales-open-lovable-v3-fixed/src/* /tmp/rosales-open-lovable-v3-fixed/src/
+          cp qa/rosales-open-lovable-v3-fixed/browser-check.mjs /tmp/rosales-open-lovable-v3-fixed/
+          cat > /tmp/rosales-open-lovable-v3-fixed/package.json <<'EOF'
+          {
+            "name":"rosales-open-lovable-qa",
+            "private":true,
+            "type":"module",
+            "scripts":{"build":"vite build","dev":"vite --host 127.0.0.1 --port 4176 --strictPort"}
+          }
+          EOF
+          cat > /tmp/rosales-open-lovable-v3-fixed/index.html <<'EOF'
+          <!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rosales Café — Open Lovable QA</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
+          EOF
+          cat > /tmp/rosales-open-lovable-v3-fixed/src/main.jsx <<'EOF'
+          import React from 'react';
+          import {createRoot} from 'react-dom/client';
+          import App from './App.jsx';
+          import './index.css';
+          createRoot(document.getElementById('root')).render(<App/>);
+          EOF
+          cat > /tmp/rosales-open-lovable-v3-fixed/tailwind.config.cjs <<'EOF'
+          module.exports={content:['./index.html','./src/**/*.{js,jsx,ts,tsx}'],theme:{extend:{}},plugins:[]};
+          EOF
+          cat > /tmp/rosales-open-lovable-v3-fixed/postcss.config.cjs <<'EOF'
+          module.exports={plugins:{tailwindcss:{},autoprefixer:{}}};
+          EOF
+      - name: Install isolated pinned dependencies
+        working-directory: /tmp/rosales-open-lovable-v3-fixed
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --save-exact react@18.3.1 react-dom@18.3.1 vite@5.4.21 tailwindcss@3.4.17 postcss@8.4.49 autoprefixer@10.4.20 playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify actual Vite production build
+        working-directory: /tmp/rosales-open-lovable-v3-fixed
+        run: |
+          set -euo pipefail
+          npm run build
+          test -s dist/index.html
+          test -n "$(find dist/assets -name '*.css' -size +0c -print -quit)"
+          test -n "$(find dist/assets -name '*.js' -size +0c -print -quit)"
+      - name: Check real Chromium on phone and desktop
+        working-directory: /tmp/rosales-open-lovable-v3-fixed
+        run: |
+          set -euo pipefail
+          npm run dev > /tmp/rosales-open-lovable-server.log 2>&1 &
+          echo $! > /tmp/rosales-open-lovable-server.pid
+          for i in $(seq 1 35); do
+            if curl --fail --silent http://127.0.0.1:4176/ >/dev/null; then break; fi
+            sleep 1
+          done
+          EVIDENCE_DIR=/tmp/rosales-open-lovable-v3-fixed/evidence node browser-check.mjs
+      - name: Publish QA screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosales-open-lovable-v3-fixed-browser-evidence
+          path: /tmp/rosales-open-lovable-v3-fixed/evidence/
+          if-no-files-found: ignore
+          retention-days: 14

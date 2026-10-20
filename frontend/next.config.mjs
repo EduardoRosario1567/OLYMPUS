@@ -8,7 +8,20 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+const CLOUD_PROXY_ENABLED = process.env.OLYMPUS_FRONTEND_CLOUD_PROXY === "1";
+const CLOUD_BACKEND_ORIGIN = process.env.OLYMPUS_BACKEND_INTERNAL_URL
+  || "http://olympus-cloud-backend.railway.internal:8000";
+if (CLOUD_PROXY_ENABLED && !/^http:\/\/(?:[a-z0-9-]+\.railway\.internal|127\.0\.0\.1|localhost)(?::\d{2,5})?$/.test(CLOUD_BACKEND_ORIGIN)) {
+  throw new Error("OLYMPUS_BACKEND_INTERNAL_URL must be an internal backend");
+}
+
 const nextConfig = {
+  async rewrites() {
+    return CLOUD_PROXY_ENABLED ? [{
+      source: "/api/olympus/:path*",
+      destination: CLOUD_BACKEND_ORIGIN + "/:path*",
+    }] : [];
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

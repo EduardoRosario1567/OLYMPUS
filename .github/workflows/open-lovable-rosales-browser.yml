@@ -1,0 +1,38 @@
+name: Open Lovable Rosales Independent Browser QA
+on:
+  push:
+    branches: [feature/olympus-cloud-private-beta]
+    paths:
+      - 'entregas/rosales-cafe-open-lovable-qa/**'
+      - '.github/workflows/open-lovable-rosales-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-react-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: entregas/rosales-cafe-open-lovable-qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install controlled React/Vite/Tailwind QA dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Independent Vite production build of generated Open Lovable source
+        run: npm run build
+      - name: Browser regression on iPhone and desktop
+        run: node site_check.mjs
+      - name: Preserve screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosales-open-lovable-browser-evidence
+          path: entregas/rosales-cafe-open-lovable-qa/evidence/*.png
+          if-no-files-found: ignore
+          retention-days: 7

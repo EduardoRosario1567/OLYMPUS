@@ -39,15 +39,17 @@ def limpar_falhas_login(chave: str) -> None:
 
 
 def validar_configuracao_producao() -> None:
-    if os.environ.get("OLYMPUS_ENV", "development").strip().lower() not in {"production", "prod"}:
+    environment = os.environ.get("OLYMPUS_ENV", "development").strip().lower()
+    if environment not in {"production", "prod", "staging"}:
         return
     if SECRET_KEY == _DEVELOPMENT_SECRET or len(SECRET_KEY) < 32:
-        raise RuntimeError("OLYMPUS_JWT_SECRET forte é obrigatório em produção.")
-    if os.environ.get("OLYMPUS_DB_BACKEND", "sqlite").strip().lower() != "postgres":
-        raise RuntimeError("Produção exige OLYMPUS_DB_BACKEND=postgres; SQLite é somente local.")
+        raise RuntimeError("OLYMPUS_JWT_SECRET forte é obrigatório em staging/produção.")
+    if environment in {"production", "prod"}:
+        if os.environ.get("OLYMPUS_DB_BACKEND", "sqlite").strip().lower() != "postgres":
+            raise RuntimeError("Produção exige OLYMPUS_DB_BACKEND=postgres; SQLite é somente piloto.")
     password = os.environ.get("OLYMPUS_ADMIN_SENHA")
     if password is not None and len(password) < 12:
-        raise RuntimeError("OLYMPUS_ADMIN_SENHA deve ter ao menos 12 caracteres em produção.")
+        raise RuntimeError("OLYMPUS_ADMIN_SENHA deve ter ao menos 12 caracteres.")
 
 
 def emitir_token(email: str, tenant_id: str) -> str:
