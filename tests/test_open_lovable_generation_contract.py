@@ -1,0 +1,49 @@
+import subprocess
+import unittest
+from pathlib import Path
+
+
+class StagingGenerationContractTests(unittest.TestCase):
+    def test_patched_generation_state_budget_and_completion(self):
+        root = Path(__file__).resolve().parents[1]
+        script = r'''
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { patchGeneration } = require('./integrations/open_lovable_upstream/apply-generation-contract.cjs');
+const original = fs.readFileSync('tests/fixtures/open_lovable_generation_contract.ts', 'utf8');
+const patched = patchGeneration(original);
+const stateBlock = patched.slice(0, patched.indexOf('const options'));
+const state = { conversationState: { context: { messages: ['old mission'] } } };
+new Function('global', 'isEdit', stateBlock)(state, false);
+assert.deepEqual(state.conversationState.context.messages, []);
+state.conversationState.context.messages.push('current mission');
+new Function('global', 'isEdit', stateBlock)(state, true);
+assert.deepEqual(state.conversationState.context.messages, ['current mission']);
+const budget = patched.match(/maxTokens: (.*), \/\/ Bounded/)[1];
+assert.equal(new Function('model', 'return ' + budget)('openai/gpt-oss-120b'), 16384);
+assert.equal(new Function('model', 'return ' + budget)('other-model'), 8192);
+const finish = patched.slice(patched.indexOf('        const generationFinishReason'), patched.indexOf('        // Function to extract packages'));
+const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+const runFinish = new AsyncFunction('result', 'model', 'console', finish);
+const quiet = {log(){}};
+(async () => {
+  await runFinish({finishReason: Promise.resolve('stop'),usage:Promise.resolve({completionTokens:500})}, 'test', quiet);
+  await assert.rejects(runFinish({finishReason:Promise.resolve('length')}, 'test', quiet), /without a complete response: length/);
+  await assert.rejects(runFinish({finishReason:Promise.resolve('content-filter')}, 'test', quiet), /content-filter/);
+  const gate = patched.slice(patched.indexOf('        // Recovery must'), patched.indexOf('        // Send completion'));
+  const check = new Function('generatedCode',gate);
+  check('<file path="src/App.jsx">export default App;</file>');
+  assert.throws(()=>check('<file path="src/App.jsx">unfinished'), /incomplete file blocks/);
+  assert.throws(()=>check('no source'), /incomplete file blocks/);
+  assert.throws(()=>patchGeneration(patched), /refusing patch/);
+  assert.throws(()=>patchGeneration(original.replace('maxTokens: 8192','maxTokens: 8000')), /refusing patch/);
+  assert.throws(()=>patchGeneration(original + '\nif (!global.conversationState) {'), /refusing patch/);
+})().catch(e=>{console.error(e);process.exitCode=1});
+'''
+        result = subprocess.run(['node', '-e', script], cwd=root, text=True,
+                                capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+if __name__ == '__main__':
+    unittest.main()

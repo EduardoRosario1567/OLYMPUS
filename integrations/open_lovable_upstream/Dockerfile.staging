@@ -12,6 +12,8 @@ RUN git init -q && \
 COPY integrations/open_lovable_upstream/app/api/olympus-export/route.ts /app/app/api/olympus-export/route.ts
 COPY integrations/open_lovable_upstream/apply-groq-routing.cjs /tmp/apply-groq-routing.cjs
 RUN node /tmp/apply-groq-routing.cjs
+COPY integrations/open_lovable_upstream/apply-generation-contract.cjs /tmp/apply-generation-contract.cjs
+RUN node /tmp/apply-generation-contract.cjs
 RUN npm ci --no-audit --no-fund
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
