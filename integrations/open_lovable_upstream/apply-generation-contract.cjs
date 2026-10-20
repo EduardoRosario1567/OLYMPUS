@@ -15,7 +15,7 @@ function patchGeneration(source) {
   once('if (!global.conversationState) {',
        'if (!isEdit || !global.conversationState) {');
   once('maxTokens: 8192, // Reduce to ensure completion',
-       "maxTokens: model.startsWith('openai/gpt-oss-') ? 16384 : 8192, // Bounded staging budget");
+       "maxOutputTokens: model.startsWith('openai/gpt-oss-') ? 16384 : 8192, // Bounded staging budget (AI SDK 5)");
   once('        // Make streaming API call with appropriate provider',
        `        // Honor an explicit plain-CSS request instead of the stock Tailwind-only system prompt.
         if (!isEdit && /(?:sem|no|without)\\s+tailwind/i.test(prompt)) {
@@ -33,8 +33,8 @@ function patchGeneration(source) {
         const generationUsage = await result?.usage;
         console.log('OLYMPUS_GENERATION_FINISH', JSON.stringify({
           model, finishReason: generationFinishReason,
-          promptTokens: generationUsage?.promptTokens,
-          completionTokens: generationUsage?.completionTokens
+          inputTokens: generationUsage?.inputTokens,
+          outputTokens: generationUsage?.outputTokens
         }));
         if (generationFinishReason === 'length' || generationFinishReason === 'content-filter') {
           throw new Error('Generation ended without a complete response: ' + generationFinishReason);
