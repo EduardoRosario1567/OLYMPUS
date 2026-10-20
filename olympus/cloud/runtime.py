@@ -715,7 +715,8 @@ class CloudRuntime:
             # NEVER publish a Vite shell as a verified site.
             review = getattr(result, "delivery_review", None)
             if isinstance(review, dict) and review.get("engine") == "open_lovable":
-                if review.get("browser") != "passed_independent":
+                from olympus.integrations.browser_verifier import validate_receipt
+                if not validate_receipt(workspace, review):
                     status = ExecutionStatus.BLOCKED.value
                     completion_error = (
                         "open_lovable_validation: independent browser test is required "

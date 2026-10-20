@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 
 from olympus.agent.autonomous_developer import DeveloperReport
 from olympus.agent.mission_compiler import MissionCompiler
+from olympus.integrations.browser_verifier import BrowserVerifier, artifact_command, validate_result
 
 
 class OpenLovableError(RuntimeError):
@@ -329,11 +330,12 @@ def _verify_export(response: dict, sandbox_id: str, proposed: set[str]) -> tuple
 class OpenLovableWebDeveloper:
     """Web-only delegate preserving normal OLYMPUS missions for other tasks."""
 
-    def __init__(self, workspace: str, default_runner, telemetry=None, *, client=None):
+    def __init__(self, workspace: str, default_runner, telemetry=None, *, client=None, browser_verifier=None):
         self.workspace = Path(workspace).resolve()
         self.default_runner = default_runner
         self.telemetry = telemetry or (lambda _event: None)
         self.client = client
+        self.browser_verifier = browser_verifier
 
     def run(self, task: str, max_iterations: int = 12, resume: bool = True):
         if MissionCompiler().compile(task).task_family != 'web':
@@ -448,9 +450,11 @@ class OpenLovableWebDeveloper:
         files, digest = _verify_export(export, sid, expected_files)
         _verify_presentation_sources(files, proposed_files)
         self._confirm_sandbox(client, sid)
+        verifier = self.browser_verifier or BrowserVerifier.configured()
         root = self.workspace
         root.mkdir(parents=True, exist_ok=True)
-        for relative, content in files.items():
+        exported_files = {Path("source") / p if verifier is not None else p: c for p, c in files.items()}
+        for relative, content in exported_files.items():
             target = root / relative
             if not target.resolve().is_relative_to(root):
                 raise OpenLovableError('Output escaped execution workspace')
@@ -459,12 +463,59 @@ class OpenLovableWebDeveloper:
                 raise OpenLovableError('Refusing generated symlink target')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding='utf-8')
-        output = list(files)
+        output = list(exported_files)
+        browser_result = None
+        if verifier is not None:
+            # Export only compiled data; the private worker never runs npm scripts.
+            compiled = client.json('/api/run-command-v2', {'command': artifact_command()},
+                                   max_bytes=6 * 1024 * 1024)
+            if not _command_passed(compiled):
+                raise OpenLovableError('Compiled artifact export failed')
+            records = re.findall(r'^OLYMPUS_DIST:(.+)$', str(compiled.get('output') or ''), re.M)
+            if len(records) != 1:
+                raise OpenLovableError('Compiled artifact transcript invalid')
+            self._confirm_sandbox(client, sid)
+            try:
+                browser_result = verifier.verify(json.loads(records[0]), digest)
+                validate_result(browser_result)
+            except Exception as exc:
+                raise OpenLovableError('Independent browser verification failed: ' + type(exc).__name__) from exc
+            self._confirm_sandbox(client, sid)
         self.telemetry({
             'event': 'open_lovable_export_verified',
             'files': len(files),
             'sha256': digest,
         })
+        if browser_result:
+            # The entrypoint being published is the exact artifact retested with
+            # JavaScript disabled, not the generated Vite bootstrap document.
+            for trusted in ('index.html', 'docs', 'docs/browser-verification.json', 'docs/delivery-concept.md'):
+                if (root / trusted).is_symlink():
+                    raise OpenLovableError('Refusing trusted artifact symlink')
+            (root / 'index.html').write_text(browser_result['html'], encoding='utf-8')
+            receipt = {k: v for k, v in browser_result.items() if k != 'html'}
+            receipt_bytes = (json.dumps(receipt, ensure_ascii=False, sort_keys=True) + '\n').encode()
+            (root / 'docs').mkdir(exist_ok=True)
+            (root / 'docs/browser-verification.json').write_bytes(receipt_bytes)
+            (root / 'docs/delivery-concept.md').write_text(
+                '# Web delivery concept\n\n## Visual thesis\nStatic landing page generated with Open Lovable.\n\n'
+                '## Content plan\nUser brief; supplied assets retain their original provenance.\n\n'
+                '## Interaction plan\nInternal section navigation.\n\n## Evidence\n'
+                'Compiled React build, source integrity, independent Chromium checks at 1440x900 and 390x844. '
+                'Contrast and anchor offsets repaired deterministically; the final static HTML was retested. '
+                'This gate does not certify external factual claims or image rights.\n', encoding='utf-8')
+            self.telemetry({'event': 'open_lovable_browser_passed',
+                            'html_sha256': browser_result['html_sha256'],
+                            'repairs': len(browser_result.get('repairs', []))})
+            return DeveloperReport(
+                task, 'completed', True, (client.model,), (),
+                tuple(['index.html', 'docs/browser-verification.json', 'docs/delivery-concept.md'] +
+                      [str(p) for p in output]), (), attempt + 1,
+                delivery_review={'engine': 'open_lovable', 'build': 'passed_remote',
+                                 'export_sha256': digest, 'browser': 'passed_independent',
+                                 'receipt_sha256': hashlib.sha256(receipt_bytes).hexdigest(),
+                                 'published_html_sha256': browser_result['html_sha256'],
+                                 'scope': 'static_landing_page_pilot', 'source_integrity': 'passed'})
         concept = root / 'docs/delivery-concept.md'
         concept.parent.mkdir(parents=True, exist_ok=True)
         if not concept.exists():
