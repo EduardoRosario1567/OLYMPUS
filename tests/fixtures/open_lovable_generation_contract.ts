@@ -5,6 +5,7 @@ if (!global.conversationState) {
 const options = {
   maxTokens: 8192, // Reduce to ensure completion
 };
+        // Make streaming API call with appropriate provider
         // Function to extract packages from import statements
         // Send completion with packages info
 const completion = {

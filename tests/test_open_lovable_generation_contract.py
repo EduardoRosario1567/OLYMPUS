@@ -22,6 +22,15 @@ assert.deepEqual(state.conversationState.context.messages, ['current mission']);
 const budget = patched.match(/maxTokens: (.*), \/\/ Bounded/)[1];
 assert.equal(new Function('model', 'return ' + budget)('openai/gpt-oss-120b'), 16384);
 assert.equal(new Function('model', 'return ' + budget)('other-model'), 8192);
+const profile = patched.slice(patched.indexOf('        // Honor an explicit'), patched.indexOf('        // Make streaming API'));
+const runProfile = new Function('prompt','isEdit',"let systemPrompt='stock', fullPrompt='context';" + profile + ';return {systemPrompt,fullPrompt}');
+for (const prompt of ['Use plain CSS, no Tailwind','Sem Tailwind','without tailwind']) {
+  const result = runProfile(prompt,false);
+  assert.match(result.systemPrompt,/semantic class names and plain CSS/);
+  assert.equal(result.fullPrompt,prompt);
+}
+assert.equal(runProfile('Use Tailwind',false).systemPrompt,'stock');
+assert.equal(runProfile('sem Tailwind',true).fullPrompt,'context');
 const finish = patched.slice(patched.indexOf('        const generationFinishReason'), patched.indexOf('        // Function to extract packages'));
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 const runFinish = new AsyncFunction('result', 'model', 'console', finish);

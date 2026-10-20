@@ -16,6 +16,18 @@ function patchGeneration(source) {
        'if (!isEdit || !global.conversationState) {');
   once('maxTokens: 8192, // Reduce to ensure completion',
        "maxTokens: model.startsWith('openai/gpt-oss-') ? 16384 : 8192, // Bounded staging budget");
+  once('        // Make streaming API call with appropriate provider',
+       `        // Honor an explicit plain-CSS request instead of the stock Tailwind-only system prompt.
+        if (!isEdit && /(?:sem|no|without)\\s+tailwind/i.test(prompt)) {
+          systemPrompt = 'Generate complete React/Vite source in closed <file path="...">...</file> blocks. '
+            + 'Follow the user file list and content exactly. Use semantic class names and plain CSS in src/index.css; '
+            + 'do not use Tailwind, new packages, invented business facts or unrequested configuration files. '
+            + 'Use one main and one h1, working anchor links, responsive layouts, accessible contrast and focus styles. '
+            + 'Preserve the requested entrypoints, CSS imports and metadata. Output complete concise source only.';
+          fullPrompt = prompt;
+        }
+
+        // Make streaming API call with appropriate provider`);
   once('        // Function to extract packages from import statements',
        `        const generationFinishReason = await result?.finishReason;
         const generationUsage = await result?.usage;
