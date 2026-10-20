@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+import time
 from pathlib import Path
 from unittest.mock import patch
 from olympus.integrations.browser_verifier import BrowserVerifier, artifact_command, validate_receipt, validate_result
@@ -13,7 +14,7 @@ from tests.test_open_lovable_pilot import FakeClient, FakeRunner
 
 
 def result(source_sha):
-    html='<!doctype html><html lang="pt-BR"><head><title>Rosales</title></head><body><main><h1>Rosales Café</h1><p>Café com origem e cuidado em cada etapa do nosso trabalho, do grão à xícara.</p></main></body></html>'
+    html='<!doctype html><html lang="pt-BR"><head><title>Rosales</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;background:#f5eee2;color:#2d2018;font:18px Georgia}main{max-width:1000px;margin:auto;padding:40px}h1{font-size:48px}p{line-height:1.6}@media(max-width:600px){main{padding:20px}h1{font-size:32px}}</style></head><body><main><h1>Rosales Café</h1><p>Café com origem e cuidado em cada etapa do nosso trabalho, do grão à xícara.</p><section><h2>Uma proposta entre duas culturas do café</h2><p>Esta apresentação conceitual convida a conhecer a marca e a inspiração que orienta seu desenvolvimento, com atenção aos detalhes e respeito pelo tempo de cada momento.</p></section></main></body></html>'
     return dict(schema='olympus.browser.v1',passed=True,nonce='a'*32,
                 source_manifest_sha256=source_sha,artifact_sha256='b'*64,html=html,
                 html_sha256=hashlib.sha256(html.encode()).hexdigest(),repairs=[],
@@ -59,8 +60,36 @@ class GateTests(unittest.TestCase):
             self.assertEqual(report.tests_run,())
             self.assertEqual(report.files_modified[0],'index.html')
             self.assertTrue(validate_receipt(Path(root),report.delivery_review))
+            page=Path(root)/'index.html';original=page.read_text();page.write_text('tampered')
+            self.assertFalse(validate_receipt(Path(root),report.delivery_review))
+            page.write_text(original)
             source=Path(root)/'source/src/App.jsx';source.write_text('tampered')
             self.assertFalse(validate_receipt(Path(root),report.delivery_review))
+
+    @patch.dict(os.environ,{'OLYMPUS_ENV':'pilot','OLYMPUS_OPEN_LOVABLE_EXCLUSIVE':'1'})
+    def test_runtime_publishes_only_receipt_bound_static_html(self):
+        from olympus.cloud.runtime import CloudRuntime
+        class CompiledClient(FakeClient):
+            def json(self,endpoint,payload=None,**kwargs):
+                if payload and payload.get('command')==artifact_command():
+                    return dict(success=True,exitCode=0,output='OLYMPUS_DIST:[]\nReturn code: 0\n')
+                return super().json(endpoint,payload,**kwargs)
+        class Verifier:
+            def verify(self,files,source_sha):return result(source_sha)
+        with tempfile.TemporaryDirectory() as root:
+            runtime=CloudRuntime(root, lambda workspace,telemetry: OpenLovableWebDeveloper(
+                workspace,FakeRunner(),telemetry,client=CompiledClient(),browser_verifier=Verifier()),max_workers=1)
+            try:
+                rec=runtime.submit('rosales','Crie um site web responsivo da marca Rosales Café com título e apresentação da proposta.')
+                deadline=time.time()+5
+                while time.time()<deadline and runtime.get(rec.execution_id).status not in ('completed','failed','blocked'):
+                    time.sleep(.02)
+                current=runtime.get(rec.execution_id)
+                events=runtime.events(rec.execution_id)
+                self.assertEqual(current.status,'completed',str(events))
+                published=next(e for e in events if e['event']=='result_published')
+                self.assertTrue(published['version_id'])
+            finally:runtime.close()
 
     def test_forged_browser_status_without_receipt_rejected(self):
         with tempfile.TemporaryDirectory() as root:

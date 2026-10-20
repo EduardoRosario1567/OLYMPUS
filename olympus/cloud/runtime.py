@@ -711,7 +711,7 @@ class CloudRuntime:
             completion_error = None
             external_publication_failed = False
             # Upstream Open Lovable still uses process-global sandboxes and has
-            # no independent browser evidence. Preserve generated sources but
+            # requires a trusted browser receipt. Preserve generated sources but
             # NEVER publish a Vite shell as a verified site.
             review = getattr(result, "delivery_review", None)
             if isinstance(review, dict) and review.get("engine") == "open_lovable":
