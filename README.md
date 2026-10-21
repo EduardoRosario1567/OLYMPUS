@@ -1,3 +1,15 @@
+# OLYMPUS — IA com múltiplos provedores
+
+> ## Procuramos colaboradores — Contributors welcome
+>
+> Quer ajudar a evoluir o OLYMPUS? Buscamos contribuições em execução isolada, integração com Open Lovable e motores existentes, testes ponta a ponta, provedores econômicos e UX.
+>
+> **Projeto experimental:** a entrega nativa completa de aplicativos ainda não está comprovada. Queremos resolver esse ponto com contribuições pequenas, reproduzíveis e verificáveis.
+>
+> **[Veja as prioridades e como participar](CONTRIBUTING.md)** · **[Proponha uma colaboração](https://github.com/EduardoRosario1567/OLYMPUS/issues/new)**
+>
+> Atualização de colaboração: 21/10/2026. A documentação da base 3.0.8 abaixo foi preservada; ela não representa sozinha os trabalhos posteriores de nuvem e Open Lovable.
+
 # Olympus 3.0.8 — estabilidade e regressão
 
 Build STABILITY-REGRESSION-P1. Fonte consolidada com segurança P0, catálogo,
