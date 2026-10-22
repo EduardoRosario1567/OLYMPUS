@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências do backend
         run: pip install -r backend/requirements.txt pytest
@@ -26,6 +26,12 @@ jobs:
         run: |
           cp backend/.env.example backend/.env
           sed -i 's/OLYMPUS_ADMIN_SENHA=.*/OLYMPUS_ADMIN_SENHA=ci-test-password/' backend/.env
+
+      - name: Preparar dependências e navegador para testes de interface
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
 
       - name: Rodar suíte de testes (unittest via pytest)
         run: |
@@ -37,12 +43,6 @@ jobs:
 
       - name: Verificar dependências Python conhecidas
         run: pip install pip-audit && pip-audit -r backend/requirements.txt --strict
-
-      - name: Instalar dependências e navegador real
-        working-directory: frontend
-        run: |
-          npm ci
-          npx playwright install chromium
 
       - name: Gate de release — missão, failover, checkpoint e entrega
         run: |
@@ -61,7 +61,7 @@ jobs:
         run: |
           export PYTHONPATH=.
           cd backend
-          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+          OLYMPUS_ADMIN_EMAIL=admin@olympus.local OLYMPUS_ADMIN_SENHA=ci-test-password OLYMPUS_JWT_SECRET=ci-only-nonproduction-test-secret-0123456789 PYTHONPATH=..:. nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../backend.log 2>&1 &
           echo $! > ../backend.pid
 
       - name: Esperar o backend responder
@@ -97,25 +97,21 @@ jobs:
           RESP=$(curl -sf -X POST http://localhost:8000/auth/login \
             -H "Content-Type: application/json" \
             -d '{"email":"admin@olympus.local","senha":"ci-test-password"}')
-          echo "$RESP" | python3 -c "import sys,json; json.load(sys.stdin)['access_token']" \
+          echo "$RESP" | python3 -c "import sys,json; assert json.load(sys.stdin).get('access_token')" \
             || (echo "login não retornou access_token" && exit 1)
           TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Chamar endpoints protegidos com o token real
+      - name: Verificar endpoints SaaS protegidos com token real
         run: |
-          curl -f http://localhost:8000/dashboard/summary -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/projects?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/executions?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
-          curl -f "http://localhost:8000/logs?limit=10" -H "Authorization: Bearer $TOKEN"
-          echo
+          curl -fsS http://127.0.0.1:8000/cloud/saas/organizations -H "Authorization: Bearer $TOKEN" -o /tmp/ci-organizations.json
+          python3 -c "import json; assert isinstance(json.load(open('/tmp/ci-organizations.json'))['organizations'], list)"
+          curl -fsS http://127.0.0.1:8000/cloud/projects -H "Authorization: Bearer $TOKEN" -o /tmp/ci-projects.json
+          python3 -c "import json; assert isinstance(json.load(open('/tmp/ci-projects.json'))['projects'], list)"
 
       - name: Confirmar que endpoint protegido rejeita sem token (401)
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/dashboard/summary)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/cloud/saas/organizations)
           [ "$STATUS" = "401" ] || (echo "esperava 401, veio $STATUS" && exit 1)
 
       - name: Logs do backend (sempre, pra depurar se algo falhar)
@@ -133,7 +129,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Instalar dependências
         working-directory: frontend
@@ -141,7 +137,7 @@ jobs:
 
       - name: Preparar .env.local
         working-directory: frontend
-        run: cp .env.local.example .env.local
+        run: printf "NEXT_PUBLIC_API_URL=http://127.0.0.1:8000\\n" > .env.local
 
       - name: Build de produção
         working-directory: frontend

@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 :root {
   color-scheme: dark;
@@ -97,7 +96,8 @@ body {
 }
 
 .sidebar-link {
-  color: var(--app-muted);
+  /* Navegação precisa manter contraste WCAG em ambos os temas. */
+  color: var(--app-text);
 }
 
 .sidebar-link:hover {

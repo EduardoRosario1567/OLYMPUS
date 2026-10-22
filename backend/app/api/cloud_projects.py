@@ -239,6 +239,26 @@ def restore_version(project_id: str, version_id: str, payload: ProjectVersionRes
     except RuntimeError:
         raise HTTPException(status_code=409, detail="Aguarde a missão atual terminar antes de restaurar uma versão.")
 
+@router.post("/{project_id}/builds/{build_id}/preview-session", status_code=201)
+def create_verified_build_preview(project_id: str, build_id: str, identity=Depends(_can_read)):
+    """Only a verified delivery beneath the authenticated tenant's project can be previewed."""
+    try:
+        session = _PREVIEWS.create_verified_artifact(
+            project_id, build_id, tenant_id=identity.tenant_id
+        )
+        return {
+            "preview_url": "/cloud/projects/_preview/%s/index.html" % session.token,
+            "entrypoint": "index.html",
+            "expires_at": session.expires_at,
+            "kind": "verified_build",
+            "status": "running",
+        }
+    except (KeyError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="Projeto ou entrega verificada não encontrado.")
+    except (ValueError, OSError, TypeError):
+        raise HTTPException(status_code=409, detail="Entrega não verificada ou arquivo alterado.")
+
+
 @router.post("/{project_id}/preview-session", status_code=201)
 def create_preview_session(project_id: str, identity=Depends(_can_read)):
     try:
