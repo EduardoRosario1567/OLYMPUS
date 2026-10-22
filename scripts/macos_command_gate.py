@@ -38,8 +38,14 @@ def main() -> int:
         "installer:private_target": 'Documents/OLYMPUS-PILOTO-' in installer,
         "starter:loopback_backend": "127.0.0.1 --port 8000" in starter,
         "starter:loopback_frontend": "--hostname 127.0.0.1" in starter,
-        "starter:version_healthcheck": "backend_is_current" in starter and "frontend_is_current" in starter,
-        "starter:owned_process_checks": "ps -p" in starter and "lsof" in starter,
+        "starter:version_healthcheck": all(token in starter for token in (
+            "EXPECTED_VERSION", "backend_current()", "frontend_current()",
+            "wait_current backend_current", "wait_current frontend_current",
+        )),
+        "starter:owned_process_checks": all(token in starter for token in (
+            "lsof", "listener_pids()", "listener_cwd()", "safe_stop_port()",
+            'safe_stop_port 8000', 'safe_stop_port 3000',
+        )),
         "starter:omniroute_probe": "127.0.0.1:20128/v1/models" in starter,
         "stopper:pid_files_only": "RUNTIME_DIR" in stopper and "kill \"$pid\"" in stopper,
         "stopper:no_broad_killall": "killall" not in stopper and "pkill" not in stopper,

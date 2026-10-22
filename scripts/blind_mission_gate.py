@@ -28,6 +28,27 @@ FINAL_HTML = """<!doctype html>
 </head><body><main><nav aria-label="Navegação principal"><a href="#inicio">Início</a><a href="#processo">Processo</a><a href="#entrega">Entrega</a></nav><section id="inicio"><p>OLYMPUS · RESULTADO VERIFICADO</p><h1>Missão concluída com continuidade.</h1><p>Esta entrega foi criada, reparada, validada e publicada após uma troca de provedor. O artefato permanece disponível mesmo quando a primeira rota falha.</p></section><section id="processo"><h2>Processo preservado</h2><p>O checkpoint manteve o trabalho produzido e permitiu continuar a missão em uma rota gratuita independente.</p></section><section id="entrega"><h2>Interação validada</h2><button id="btn-teste" type="button" onclick="this.textContent='Botão funcionando';document.getElementById('status').textContent='Interação validada'">Testar interação</button><p id="status" aria-live="polite">Aguardando interação</p></section></main></body></html>"""
 
 
+DELIVERY_CONCEPT = """# OLYMPUS — Blind mission concept
+
+## Visual thesis
+An accessible, high-contrast dark landing page with concise typography,
+a navigation bar, ample whitespace and a responsive main layout.
+
+## Content plan
+This is a synthetic CI fixture, not real business information.
+All labels in the page are deliberately test-only. No externally sourced images.
+
+## Interaction plan
+A visible action button updates its own label and the accessible live status
+when clicked. Navigation uses in-page anchors. Mobile layout stays readable.
+
+## Evidence
+HTML and interaction source are deterministic fixture input. Validation must
+happen independently in the gate's actual browser, and no user-facing claim
+of real-provider execution is permitted.
+"""
+
+
 class BrowserUnavailable(RuntimeError):
     pass
 
@@ -60,6 +81,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if model == "blind/fallback":
             if state["fallback_calls"] == 0:
+                state["fallback_calls"] += 1
+                content = json.dumps({"type": "create_file", "target": "docs/delivery-concept.md", "payload": DELIVERY_CONCEPT, "reason": "satisfy web delivery concept contract"}, ensure_ascii=False)
+            elif state["fallback_calls"] == 1:
                 state["fallback_calls"] += 1
                 content = json.dumps({"type": "create_file", "target": "app/index.html", "payload": FINAL_HTML, "reason": "deliver verified interactive page"}, ensure_ascii=False)
             else:
@@ -180,7 +204,7 @@ def main() -> int:
                 "fallback_used": server.state["calls"].count("blind/fallback") >= 2,
                 "published": root_file.is_file(),
                 "previewable": preview.entrypoint == "app/index.html",
-                "browser_click": browser.get("result") == "Botão funcionando" and browser.get("status") == "Interação validada",
+                "browser_click": browser.get("result", browser.get("button")) == "Botão funcionando" and browser.get("status") == "Interação validada",
                 "browser_validator_present": browser.get("validator", "playwright") in {"playwright", "jsdom-runtime"},
             }
             if not all(checks.values()):

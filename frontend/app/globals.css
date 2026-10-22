@@ -1,6 +1,18 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@source "../components";
+@source ".";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --radius-xl: 0.85rem;
+  --radius-2xl: 1.15rem;
+}
+
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
 
 :root {
   color-scheme: dark;

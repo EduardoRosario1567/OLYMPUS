@@ -154,7 +154,9 @@ class TestProviderFailoverV210(unittest.TestCase):
         from app.core.provider_runtime import configured_mission_routes
         registry = ProviderRegistry()
         registry.register("omniroute", LiveOmniRoute(), 10)
-        with patch.dict(os.environ, {"OLYMPUS_FREE_FALLBACK_PROVIDERS":""}, clear=True):
+        # This test exercises catalog selection, not mutable capacity rankings.
+        with patch.dict(os.environ, {"OLYMPUS_FREE_FALLBACK_PROVIDERS":""}, clear=True), \
+             patch("app.core.provider_runtime.capacity_filter_routes", side_effect=lambda routes: tuple(routes)):
             ids = tuple(route.id for route in configured_mission_routes(registry))
         self.assertEqual(ids[0], "Conding-free")
         self.assertEqual(set(ids[1:]), {"openrouter/openrouter/free", "openrouter/openai/gpt-oss-20b:free", "cohere/north-mini-code:free", "nvidia/nemotron-3-super-120b:free"})
@@ -174,9 +176,11 @@ class TestProviderFailoverV210(unittest.TestCase):
         from app.core.provider_runtime import configured_mission_routes
         registry = ProviderRegistry()
         registry.register("omniroute", MetaOnlyOmniRoute(), 10)
+        # Other tests exercise capacity-aware reordering; isolate it here.
         with patch.dict(os.environ, {
             "OLYMPUS_FREE_FALLBACK_PROVIDERS": "",
-        }, clear=True):
+        }, clear=True), \
+             patch("app.core.provider_runtime.capacity_filter_routes", side_effect=lambda routes: tuple(routes)):
             ids = tuple(route.id for route in configured_mission_routes(registry))
 
         self.assertEqual(ids, ("Conding-free", "openrouter/openrouter/free"))

@@ -710,6 +710,22 @@ class CloudRuntime:
                 status = status.value
             completion_error = None
             external_publication_failed = False
+            # Upstream Open Lovable still uses process-global sandboxes and has
+            # no independent browser evidence. Preserve generated sources but
+            # NEVER publish a Vite shell as a verified site.
+            review = getattr(result, "delivery_review", None)
+            if isinstance(review, dict) and review.get("engine") == "open_lovable":
+                if review.get("browser") != "passed_independent":
+                    status = ExecutionStatus.BLOCKED.value
+                    completion_error = (
+                        "open_lovable_validation: independent browser test is required "
+                        "before publishing generated React deliverables"
+                    )
+                    self.store.event(
+                        execution_id, "open_lovable_verification_blocked",
+                        reason="browser_evidence_missing",
+                        workspace_preserved=True,
+                    )
             if str(status) == ExecutionStatus.COMPLETED.value:
                 failure_stage = "verification"
                 self.store.update(execution_id, status=ExecutionStatus.VERIFYING.value)

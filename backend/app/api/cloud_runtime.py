@@ -102,7 +102,7 @@ def _runner_factory(workspace: str, telemetry):
         mission_timeout,
         policy_override=policy,
     )
-    return AutonomousDeveloper(
+    developer = AutonomousDeveloper(
         root=workspace,
         router=router_adapter,
         selector=selector,
@@ -116,6 +116,19 @@ def _runner_factory(workspace: str, telemetry):
             ),
         )),
     )
+    # The Open Lovable upstream remains globally stateful. A single trusted
+    # tenant is allowed for the non-production pilot; all others stay on the
+    # original OLYMPUS engine instead of sharing its E2B sandbox.
+    if os.environ.get("OLYMPUS_OPEN_LOVABLE_ENABLED", "0") == "1":
+        from olympus.integrations.open_lovable import (
+            OpenLovableWebDeveloper, pilot_tenant_authorized,
+        )
+        if pilot_tenant_authorized(
+            getattr(record, "tenant_id", None),
+            os.environ.get("OLYMPUS_OPEN_LOVABLE_PILOT_TENANT_ID"),
+        ):
+            return OpenLovableWebDeveloper(workspace, developer, telemetry=telemetry)
+    return developer
 
 
 _RUNTIME = CloudRuntime(
