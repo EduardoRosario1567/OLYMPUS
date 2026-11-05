@@ -36,3 +36,14 @@ O processo encerra após gerar os relatórios; as portas já existentes não sã
 - Ainda não existe classificação automática confiável de nichos, precificação de atacado ou previsão de vendas.
 
 Os arquivos `tendencias.csv` e `tendencias.html` são gerados no Mac. Em falha de rede, o sistema utiliza somente dados previamente armazenados e informa o problema, sem gerar valores fictícios.
+
+
+## Inteligência comercial integrada (dados reais já coletados)
+
+O módulo `inteligencia.py` cruza `produtos`, `cotacoes` e `tendencias` do mesmo `radar.sqlite3`. `contexto.py` também produz `contexto_noticias.json` quando a consulta RSS funciona. A correlação textual é **conservadora** e não implica demanda, intenção de compra ou vantagem competitiva.
+
+Arquivos de saída: `inteligencia_comercial.html`, `decisoes_comerciais.json` e `entrada_olympus.json`.
+
+`avaliacao_olympus.py` carrega a entrada e, **somente com --executar**, aciona o `OpenAICompatibleAdapter` do repositório local `~/Projetos-IA/OLYMPUS-TESTE`. O serviço `gemma4:31b-cloud` está bloqueado por franquia mensal, portanto a execução padrão não chama nenhum modelo. Quando a franquia retornar, o comando `python3 avaliacao_olympus.py --executar` gerará `avaliacao_modelo.json`. Essa avaliação por IA não valida os preços nem fatos por si só.
+
+Os testes locais estão em `test_inteligencia.py` e `test_avaliacao_olympus.py`, além dos anteriores. O ramo experimental não altera a `main` do OLYMPUS.
