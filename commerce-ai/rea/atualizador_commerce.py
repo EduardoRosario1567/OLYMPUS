@@ -62,6 +62,19 @@ def update():
     errors=[]
     imported=0
     files=[]
+    collector=BASE/"coletor_amazon_spapi.py"
+    amazon="coletor ausente"
+    if collector.exists():
+        try:
+            proc=subprocess.run([sys.executable,str(collector)],cwd=str(BASE),capture_output=True,text=True,timeout=150)
+            if proc.returncode:
+                raise RuntimeError((proc.stderr or proc.stdout).strip()[:300])
+            amazon="consulta concluida" if "Consulta Amazon BR:" in proc.stdout else "nao conectado"
+            print("Fonte Amazon:",amazon)
+        except Exception as exc:
+            amazon="erro de consulta"
+            errors.append({"coletor":"Amazon SP-API","erro":str(exc)})
+            print("AVISO: Consulta Amazon indisponivel:",str(exc),file=sys.stderr)
     for csvfile in sorted(INBOX.glob("*.csv")):
         try:
             with blackbox_br.connect(DB) as con:
@@ -93,6 +106,7 @@ def update():
     result={
         "executado_em_utc":stamp,
         "status":"ERRO" if errors else "OK",
+        "fonte_amazon":amazon,
         "csv_importados":files,
         "registros_csv_importados":imported,
         "paineis":panels,
