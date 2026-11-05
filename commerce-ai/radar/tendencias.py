@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """OLYMPUS: tendencias Google Trends RSS Brasil. Sem dependencias externas."""
-import argparse, csv, datetime as dt, html, json, pathlib, sqlite3
+import argparse, csv, datetime as dt, html, json, pathlib, sqlite3, re, unicodedata
 import urllib.request, urllib.error, xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote
@@ -11,6 +11,23 @@ NS = {'ht':'https://trends.google.com/trending/rss'}
 HEADERS = {'User-Agent':'OLYMPUS-Commerce-AI/1.1 (personal market research)',
            'Accept':'application/rss+xml, application/xml, text/xml'}
 MAX_BYTES = 2_000_000
+
+def classificar_termo(termo):
+    """Triagem textual conservadora. Nao valida mercado ou intencao de compra."""
+    texto = unicodedata.normalize('NFKD', termo.casefold())
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r'[^a-z0-9 ]+', ' ', texto)
+    palavras = set(texto.split())
+    produtos = {'fone','headset','notebook','mouse','teclado','celular',
+                'smartphone','carregador','luminaria','cadeira','mesa','monitor',
+                'aspirador','cafeteira','ventilador','liquidificador','impressora',
+                'geladeira','fogao','tenis','mochila','sapato','perfume','bicicleta',
+                'microondas','airfryer','panela','brinquedo','organizador','tablet',
+                'camera','roteador','televisao','tv','colchao','sofa'}
+    # Um termo com nome de objeto pode ser noticia; exige revisao humana.
+    if palavras.intersection(produtos):
+        return 'POSSIVEL PRODUTO — REVISAR'
+    return 'ASSUNTO GERAL / INDETERMINADO'
 
 def parse_rss(raw):
     raiz = ET.fromstring(raw)
@@ -86,19 +103,20 @@ def gerar_relatorio(con):
                 'table{border-collapse:collapse;width:100%}'
                 'th,td{text-align:left;border-bottom:1px solid #475569;padding:12px}'
                 'a{color:#93c5fd}</style><h1>OLYMPUS Commerce AI — Tendencias Brasil</h1>'
-                '<p>Sinais gerais de interesse em pesquisas. Nao sao vendas, '
+                '<p>Sinais gerais de interesse em pesquisas. A triagem textual exige revisao humana. Nao sao vendas, '
                 'nichos validados, demanda comercial ou faturamento.</p>'
-                '<table><tr><th>Termo</th><th>Buscas aproximadas (rotulo Google)</th>'
+                '<table><tr><th>Termo</th><th>Triagem comercial</th><th>Buscas aproximadas (rotulo Google)</th>'
                 '<th>Publicado</th><th>Fonte</th></tr>')
         for termo,volume,publicado,url,fonte in dados:
-            f.write('<tr><td>'+html.escape(termo)+'</td><td>'+html.escape(volume or 'N/D')+
+            f.write('<tr><td>'+html.escape(termo)+'</td><td>'+html.escape(classificar_termo(termo))+'</td><td>'+html.escape(volume or 'N/D')+
                     '</td><td>'+html.escape(publicado or 'N/D')+'</td><td>')
             f.write('<a href="'+html.escape(url or fonte,quote=True)+'" rel="noopener noreferrer">Consultar</a></td></tr>')
         f.write('</table></html>')
     csv_path=BASE/'tendencias.csv'
     with csv_path.open('w',encoding='utf-8',newline='') as f:
-        w=csv.writer(f);w.writerow(['termo','volume_aproximado','publicado_em','url','fonte'])
-        w.writerows(dados)
+        w=csv.writer(f);w.writerow(['termo','triagem','volume_aproximado','publicado_em','url','fonte'])
+        for termo, volume, publicado, url, fonte in dados:
+            w.writerow([termo,classificar_termo(termo),volume,publicado,url,fonte])
     return arq,len(dados)
 
 def main():
