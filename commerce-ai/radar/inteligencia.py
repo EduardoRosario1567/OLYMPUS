@@ -79,6 +79,8 @@ def analisar(con, hoje=None):
         # Mesmo com margem e correlacao nao ha prova de vendas ou fornecedores verificados.
         if not sinais or contribuicao is None:
             decisao='DADOS INSUFICIENTES'
+        elif Decimal(percentual)<Decimal('15'):
+            decisao='MARGEM ABAIXO DA META'
         elif alerta:
             decisao='REVISAR EVIDENCIAS'
         else:
