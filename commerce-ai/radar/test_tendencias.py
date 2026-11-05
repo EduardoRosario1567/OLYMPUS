@@ -44,6 +44,14 @@ class TestTendencias(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     tendencias.coletar(limite)
 
+    def test_classificacao_conservadora(self):
+        self.assertEqual(tendencias.classificar_termo('luminária solar'),
+                         'POSSIVEL PRODUTO — REVISAR')
+        self.assertEqual(tendencias.classificar_termo('cristiano ronaldo'),
+                         'ASSUNTO GERAL / INDETERMINADO')
+        self.assertEqual(tendencias.classificar_termo('edital ibge'),
+                         'ASSUNTO GERAL / INDETERMINADO')
+
     def test_sqlite_e_escape(self):
         with tempfile.TemporaryDirectory() as temp:
             raiz=pathlib.Path(temp)
@@ -58,6 +66,8 @@ class TestTendencias(unittest.TestCase):
                 self.assertNotIn('<script>',pagina)
                 self.assertIn('&lt;script&gt;',pagina)
                 self.assertTrue((raiz/'tendencias.csv').exists())
+                self.assertIn('Triagem comercial',pagina)
+                self.assertIn('triagem',(raiz/'tendencias.csv').read_text(encoding='utf-8'))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
