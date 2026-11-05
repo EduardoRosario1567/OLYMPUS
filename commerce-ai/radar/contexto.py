@@ -2,6 +2,7 @@
 """Contexto jornalistico de tendencias: leitura publica RSS Brasil."""
 import csv
 import html
+import json
 import pathlib
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -39,6 +40,14 @@ def salvar(registros):
         escritor.writerow(["termo", "noticias", "observacao"])
         for termo, noticias in registros:
             escritor.writerow([termo, len(noticias), "Cobertura jornalistica, nao vendas"])
+    contexto = {}
+    for termo, noticias in registros:
+        contexto[termo.casefold()] = [
+            {"titulo":titulo,"veiculo":fonte,"url":link}
+            for titulo, fonte, link in noticias
+        ]
+    (BASE / "contexto_noticias.json").write_text(
+        json.dumps(contexto, ensure_ascii=False, indent=2), encoding="utf-8")
     with pagina.open("w", encoding="utf-8") as f:
         f.write('<!doctype html><html lang="pt-br"><meta charset="utf-8">')
         f.write('<title>OLYMPUS Contexto</title><style>')
