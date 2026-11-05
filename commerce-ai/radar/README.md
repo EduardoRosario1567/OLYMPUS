@@ -1,41 +1,38 @@
-# OLYMPUS Commerce AI — Radar no GitHub
+# OLYMPUS Commerce AI — Radar + Tendências BR
 
-Versão experimental simplificada, sem arquivo ZIP. Compatível com Python 3.9+, sem pacotes adicionais e sem novos servidores. **Não é o ZIP v3 completo**; o conector Open Prices do pacote anterior não está incluído.
+Ramo experimental `commerce-radar-v3`, isolado da `main`. Compatível com Python 3.9+. Sem novos servidores, sem modelo de IA, sem pacotes externos. Não contém todos os arquivos do antigo ZIP v3.
 
-## Instalar ou atualizar e executar testes no Mac
-
-Execute o bloco abaixo em um Terminal comum. Ele não abre processos residentes e **não apaga** o banco `radar.sqlite3`.
+## Atualizar e testar com um único comando
 
 ```bash
-bash <<'RADAR'
+bash <<'OLYMPUS_RADAR'
 set -e
 BASE="$HOME/Projetos-IA/olympus-commerce-ai/radar-github"
-URL="https://raw.githubusercontent.com/EduardoRosario1567/OLYMPUS/commerce-radar-v3/commerce-ai/radar"
+RAW="https://raw.githubusercontent.com/EduardoRosario1567/OLYMPUS/commerce-radar-v3/commerce-ai/radar"
 mkdir -p "$BASE"
-curl -fLsS --retry 2 "$URL/radar.py" -o "$BASE/radar.py.novo"
-curl -fLsS --retry 2 "$URL/test_radar.py" -o "$BASE/test_radar.py.novo"
-python3 -m py_compile "$BASE/radar.py.novo" "$BASE/test_radar.py.novo"
-if [ -f "$BASE/radar.py" ]; then cp "$BASE/radar.py" "$BASE/radar.py.bak"; fi
-mv "$BASE/radar.py.novo" "$BASE/radar.py"
-mv "$BASE/test_radar.py.novo" "$BASE/test_radar.py"
-(cd "$BASE" && python3 -m unittest -v test_radar)
+for F in radar.py tendencias.py test_radar.py test_tendencias.py; do
+  curl -fLsS --retry 2 --max-time 40 "$RAW/$F" -o "$BASE/$F.novo"
+  python3 -m py_compile "$BASE/$F.novo"
+done
+for F in radar.py tendencias.py test_radar.py test_tendencias.py; do
+  if [ -f "$BASE/$F" ]; then cp "$BASE/$F" "$BASE/$F.bak"; fi
+  mv "$BASE/$F.novo" "$BASE/$F"
+done
+(cd "$BASE" && python3 -m unittest -v test_radar test_tendencias)
 python3 "$BASE/radar.py" --limite 20
-open "$BASE/relatorio.html"
-RADAR
+python3 "$BASE/tendencias.py" --limite 25
+open "$BASE/relatorio.html" "$BASE/tendencias.html"
+OLYMPUS_RADAR
 ```
 
-A chamada externa à API depende do acesso de rede do Mac. Se indisponível, o programa mantém registros existentes e abre o relatório (que pode estar vazio). O resultado no GitHub não comprova ainda a consulta ao vivo.
+O processo encerra após gerar os relatórios; as portas já existentes não são afetadas. Bancos persistem em `radar.sqlite3`, sem apagar as versões anteriores.
 
-## Dados e limitações
+## Fontes e limitações
 
-- Catálogo: Open Food Facts, produtos associados ao Brasil. Registro no catálogo **não** prova vendas, nível de demanda, preço ou estoque.
-- Cotações: importadas pelo operador em CSV. Não são verificadas automaticamente.
-- Cálculo: **margem de contribuição estimada**, não lucro líquido.
-- Dados persistentes ficam em `radar.sqlite3` na pasta `radar-github`; atualização de código não remove nem migra bancos de outras versões.
-- Sem credenciais, sem compras e sem anúncios automáticos.
+- Catálogo: Open Food Facts, registros associados ao Brasil. Não comprova disponibilidade, venda ou demanda.
+- Tendências: RSS público Google Trends (`https://trends.google.com/trending/rss?geo=BR`). Termos frequentemente incluem esportes, notícias e entretenimento. Os volumes são rótulos aproximados de buscas, não vendas. A fonte pode mudar, limitar ou bloquear solicitações.
+- Mercado Livre: conexão oficial para tendências exige autorização OAuth; não está habilitada automaticamente.
+- Cotação CSV: dados inseridos pelo operador. URLs não são verificadas e a margem de contribuição não equivale a lucro líquido.
+- Ainda não existe classificação automática confiável de nichos, precificação de atacado ou previsão de vendas.
 
-## Importar cotações
-
-Colunas obrigatórias: `codigo,preco,custo,frete,comissao,imposto,outros,url_preco,url_fornecedor,consultado_em`. Data ISO `AAAA-MM-DD`. Exemplo de execução: `python3 radar.py --sem-rede --csv cotacoes.csv`. O código deve constar no catálogo armazenado.
-
-O ramo `commerce-radar-v3` é experimental. Nenhuma alteração na `main` do OLYMPUS.
+Os arquivos `tendencias.csv` e `tendencias.html` são gerados no Mac. Em falha de rede, o sistema utiliza somente dados previamente armazenados e informa o problema, sem gerar valores fictícios.
